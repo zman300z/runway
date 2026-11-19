@@ -1,5 +1,5 @@
 // Pay schedule: paydays, the next payday, paydays waiting to be confirmed, monthly pay.
-import { addDays, diffDays, parseISO, toISO, daysInMonth } from './dates.js';
+import { addDays, diffDays, parseISO, toISO, daysInMonth, maxDate } from './dates.js';
 
 export const FREQUENCIES = ['weekly', 'biweekly', 'semimonthly', 'monthly'];
 export const FREQUENCY_LABEL = {
@@ -55,10 +55,20 @@ export function paydaysBetween(pay, from, to) {
   }
 }
 
-/** The first payday strictly after `date`, or null without a pay schedule. */
+/**
+ * Paydays you can count on from `from` through `to`: never earlier than the first payday you
+ * entered (the anchor), even though the schedule could be stepped backward from it.
+ */
+export function expectedPaydays(pay, from, to) {
+  if (!pay) return [];
+  return paydaysBetween(pay, maxDate(from, pay.anchor), to);
+}
+
+/** The first payday strictly after `date` (and not before your first payday), or null. */
 export function nextPayday(pay, date) {
   if (!pay) return null;
-  return paydaysBetween(pay, addDays(date, 1), addDays(date, 70))[0] ?? null;
+  const from = maxDate(addDays(date, 1), pay.anchor);
+  return paydaysBetween(pay, from, addDays(from, 70))[0] ?? null;
 }
 
 /**

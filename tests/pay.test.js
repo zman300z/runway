@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  paydaysBetween, nextPayday, pendingPaydays, monthlyPay, suggestedLimit, describeDays, ordinal,
+  paydaysBetween, nextPayday, expectedPaydays, pendingPaydays, monthlyPay, suggestedLimit, describeDays, ordinal,
 } from '../js/pay.js';
 
 const biweekly = { amount: 52000, frequency: 'biweekly', anchor: '2026-11-21', days: null, handledThrough: null };
@@ -63,4 +63,14 @@ test('monthly pay and the suggested limit', () => {
   assert.equal(suggestedLimit({ ...biweekly, frequency: 'monthly', amount: 150000 }), 120000);
   assert.equal(monthlyPay(null), 0);
   assert.equal(suggestedLimit(null), 0);
+});
+
+test('a first payday weeks away is the next payday: nothing earlier is invented', () => {
+  // Today Nov 19, paid every 2 weeks, first payday Dec 10. Nov 26 must not count.
+  const pay = { amount: 50000, frequency: 'biweekly', anchor: '2026-12-10', days: null, handledThrough: '2026-11-18' };
+  assert.equal(nextPayday(pay, '2026-11-19'), '2026-12-10');
+  assert.deepEqual(expectedPaydays(pay, '2026-11-20', '2026-12-31'), ['2026-12-10', '2026-12-24']);
+  assert.deepEqual(pendingPaydays(pay, '2026-11-30'), []);
+  const monthly = { ...pay, frequency: 'monthly', anchor: '2027-01-05' };
+  assert.equal(nextPayday(monthly, '2026-11-19'), '2027-01-05');
 });

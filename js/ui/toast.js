@@ -21,24 +21,26 @@ function dismiss(entry, instant = false) {
  * Show a toast. Options: { action: { label, run }, duration (ms, Infinity to stay), tone: "bad" | "good",
  * queue: true to wait until the current toast is gone instead of replacing it }.
  */
-export function toast(message, { action = null, duration = 3500, tone = '', queue: wait = false, tapAnywhere = false } = {}) {
+export function toast(message, { action = null, duration = 3500, tone = '', queue: wait = false, tapAnywhere = false, sticky = false } = {}) {
   const region = document.getElementById('toasts');
   if (!region) return null;
   if (wait && current) {
-    queue.push([message, { action, duration, tone, tapAnywhere }]);
+    queue.push([message, { action, duration, tone, tapAnywhere, sticky }]);
     return null;
   }
+  if (current?.sticky && !current.gone) queue.unshift(current.args);
   dismiss(current, true);
   const el = document.createElement('div');
   el.className = `toast${tone ? ` toast-${tone}` : ''}`;
   el.setAttribute('role', tone === 'bad' ? 'alert' : 'status');
   setHTML(el, html`<span class="toast-text">${message}</span>${action ? html`<button type="button" class="toast-action">${action.label}</button>` : ''}`);
   region.append(el);
-  const entry = { el, timer: null, gone: false };
+  const entry = { el, timer: null, gone: false, sticky, args: [message, { action, duration, tone, tapAnywhere, sticky }] };
   if (action) {
     const target = tapAnywhere ? el : el.querySelector('.toast-action');
     if (tapAnywhere) el.classList.add('toast-tappable');
     target.addEventListener('click', () => {
+      entry.sticky = false;
       dismiss(entry);
       action.run();
     });

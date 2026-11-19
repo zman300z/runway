@@ -123,7 +123,7 @@ function balanceSheet(ctx) {
         const c = readMoney(st.amount);
         if (c === null || Number.isNaN(c)) return showFormError(sheet.body, 'Enter your balance.');
         try {
-          ctx.update((d) => setBalance(d, st.negative ? -Math.abs(c) : Math.abs(c), st.date));
+          ctx.update((d) => setBalance(d, st.negative ? -Math.abs(c) : Math.abs(c), st.date, ctx.today));
         } catch (err) {
           return showFormError(sheet.body, err.message);
         }

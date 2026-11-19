@@ -106,7 +106,7 @@ function billSheet(ctx, id = null) {
     const day = parseISO(st.next).d;
     if (st.cadence === 'monthly' && day >= 29) lines.push(`In months without a ${day}${day === 31 ? 'st' : 'th'}, it charges on the last day.`);
     const nextChanged = !b || st.next !== b.next || st.cadence !== b.cadence;
-    if (nextChanged && st.next <= ctx.today) {
+    if (nextChanged && st.next <= ctx.today && (!b || b.active)) {
       const dates = chargeDatesBetween(st.next, st.cadence, st.next, ctx.today);
       const posted = new Set(ctx.data.posted);
       const fresh = b ? dates.filter((d) => !posted.has(`${b.id}:${d}`)) : dates;

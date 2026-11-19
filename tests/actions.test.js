@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addTransaction, updateTransaction, deleteTransaction, restoreTransaction, makeTransaction, reconcile,
-  setBalance, setPay, confirmPayday, markPaydayHandled, addBill, updateBill, setBillActive, deleteBill,
+  setBalance, setBalanceNow, setPay, confirmPayday, markPaydayHandled, addBill, updateBill, setBillActive, deleteBill,
   addCategory, updateCategory, moveCategory, deleteCategory, setBudget, setGoal, runDailyJobs,
 } from '../js/actions.js';
 import { balanceOn, summarize } from '../js/budget.js';
@@ -158,4 +158,31 @@ test('daily jobs post due bills and remember the day', () => {
   const again = runDailyJobs(after, TODAY, { makeId: idMaker(), now: 2 });
   assert.equal(again.added.length, 0);
   assert.equal(again.data, after);
+});
+
+test('balance dates cannot be in the future', () => {
+  assert.throws(() => setBalance(data(), 5000, '2026-11-20', TODAY), /future/);
+  assert.equal(setBalance(data(), 5000, TODAY, TODAY).balance.startDate, TODAY);
+});
+
+test('a balance typed "right now" already includes what you logged today', () => {
+  // Skip the balance in setup, log a $5 coffee, then add the balance from the bank: $100.
+  const withCoffee = addTransaction(data(), { type: 'expense', amount: -500, categoryId: 'coffee', date: TODAY }).data;
+  const { data: after } = reconcile(withCoffee, 10000, TODAY);
+  assert.equal(balanceOn(after, TODAY), 10000, 'the coffee is not subtracted twice');
+  assert.deepEqual(setBalanceNow(withCoffee, 10000, TODAY).balance, { start: 10500, startDate: TODAY });
+});
+
+test('changing only the paycheck amount keeps an unanswered payday asking', () => {
+  const d = data({ pay: { amount: 50000, frequency: 'biweekly', anchor: '2026-11-07', days: null, handledThrough: '2026-11-07' } });
+  assert.deepEqual(pendingPaydays(d.pay, '2026-11-22'), ['2026-11-21']);
+  // The pay sheet shows the next payday (Dec 5), which is on the same schedule.
+  const edited = setPay(d, { amount: 52000, frequency: 'biweekly', anchor: '2026-12-05' }, '2026-11-22');
+  assert.equal(edited.pay.amount, 52000);
+  assert.equal(edited.pay.anchor, '2026-11-07');
+  assert.deepEqual(pendingPaydays(edited.pay, '2026-11-22'), ['2026-11-21']);
+  const semi = data({ pay: { amount: 60000, frequency: 'semimonthly', anchor: '2026-10-01', days: [1, 15], handledThrough: '2026-10-31' } });
+  const semiEdited = setPay(semi, { amount: 61000, frequency: 'semimonthly', days: [1, 15] }, '2026-11-22');
+  assert.equal(semiEdited.pay.handledThrough, '2026-10-31');
+  assert.deepEqual(pendingPaydays(semiEdited.pay, '2026-11-22'), ['2026-11-01', '2026-11-15']);
 });

@@ -258,3 +258,24 @@ test('balance chart: history since the starting balance, projection to month end
   assert.equal(balanceSeries(novemberExample({ balance: null }), TODAY), null);
   assert.equal(balanceSeries(novemberExample(), '2026-11-30').projection.length, 0, 'nothing to project on the last day');
 });
+
+test('cash view waits for the real first payday, and the chart adds no early paycheck', () => {
+  const d = novemberExample({
+    balance: { start: 30000, startDate: '2026-11-19' },
+    pay: { amount: 50000, frequency: 'biweekly', anchor: '2026-12-10', days: null, handledThrough: '2026-11-18' },
+    transactions: [],
+  });
+  const s = summarize(d, '2026-11-19');
+  assert.equal(s.payday, '2026-12-10');
+  assert.equal(s.cashDays, 21);
+  // Spotify (Nov 22), auto-save (Nov 25), phone (Nov 28) and rent (Dec 1) all fall before Dec 10.
+  assert.equal(s.billsBeforeHorizon, 1199 + 2500 + 4500 + 60000);
+  const series = balanceSeries(d, '2026-11-19');
+  assert.equal(series.events.filter((e) => e.kind === 'pay').length, 0);
+});
+
+test('a starting balance dated in the future has no history yet (and never crashes the chart)', () => {
+  const d = novemberExample({ balance: { start: 50000, startDate: '2026-11-25' } });
+  const series = balanceSeries(d, '2026-11-19');
+  assert.equal(series.history.length, 0);
+});

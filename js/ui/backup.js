@@ -71,6 +71,14 @@ export async function exportCSV(ctx) {
 }
 
 export async function importBackup(ctx) {
+  try {
+    await importFlow(ctx);
+  } catch (err) {
+    ctx.toast(`Couldn't read that file. ${err.message}`, { tone: 'bad', duration: 7000 });
+  }
+}
+
+async function importFlow(ctx) {
   const file = await pickTextFile('.json,application/json');
   if (!file) return;
   let parsed;
@@ -83,7 +91,8 @@ export async function importBackup(ctx) {
   const mine = ctx.mode === 'demo' ? ctx.realData() : ctx.data;
   const now = countData(mine);
   const incoming = parsed.counts;
-  const when = parsed.exportedAt ? formatDate(todayISO(new Date(parsed.exportedAt)), 'full') : 'an unknown date';
+  const stamp = parsed.exportedAt ? new Date(parsed.exportedAt) : null;
+  const when = stamp && !Number.isNaN(stamp.getTime()) ? formatDate(todayISO(stamp), 'full') : 'an unknown date';
   const sheet = openSheet({
     title: 'Restore this backup?',
     render: () => html`
@@ -129,8 +138,7 @@ export function eraseSheet(ctx) {
     actions: {
       erase(el) {
         if (el.disabled) return;
-        sheet.close();
-        ctx.eraseEverything();
+        ctx.eraseEverything(); // reloads the app, which removes this sheet too
       },
     },
   });

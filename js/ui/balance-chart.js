@@ -21,6 +21,12 @@ export function balanceCard(ctx) {
         <button type="button" class="btn btn-quiet btn-sm" data-action="reconcile">Add balance</button></div>
     </section>`;
   }
+  if (!series.history.length) {
+    return html`<section class="home-section" aria-labelledby="bal-title">
+      <div class="section-head"><h2 id="bal-title">Balance over time</h2></div>
+      <div class="card empty-card"><p class="muted">Your balance tracking starts on ${formatDate(ctx.data.balance.startDate, 'medium')}.</p></div>
+    </section>`;
+  }
   const points = [...series.history, ...series.projection.slice(1)];
   const enough = points.length >= 2 && ctx.data.transactions.length + ctx.data.recurring.length > 0;
   const today = series.history[series.history.length - 1];

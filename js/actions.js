@@ -6,7 +6,7 @@ import { addDays, isValidISO, clampStartDay } from './dates.js';
 import { balanceOn } from './budget.js';
 import { postDueCharges, newBill, editBill, pauseBill, resumeBill, CADENCES } from './recurring.js';
 import { INCOME_SOURCE_IDS, BUCKETS, removeCategory } from './categories.js';
-import { FREQUENCIES } from './pay.js';
+import { FREQUENCIES, paydaysBetween } from './pay.js';
 
 const TYPES = ['expense', 'income', 'adjustment'];
 export const NOTE_MAX = 140;
@@ -83,9 +83,7 @@ export function restoreTransaction(data, removed) {
  */
 export function reconcile(data, actual, today, opts = {}) {
   if (!Number.isSafeInteger(actual) || Math.abs(actual) > MAX_CENTS) throw new Error('Enter your bank balance.');
-  if (!data.balance) {
-    return { data: { ...data, balance: { start: actual, startDate: today } }, diff: null, tx: null };
-  }
+  if (!data.balance) return { data: setBalanceNow(data, actual, today), diff: null, tx: null };
   const diff = actual - balanceOn(data, today);
   if (diff === 0) return { data, diff: 0, tx: null };
   const { data: next, tx } = addTransaction(
@@ -96,11 +94,22 @@ export function reconcile(data, actual, today, opts = {}) {
   return { data: next, diff, tx };
 }
 
-export function setBalance(data, start, startDate) {
+export function setBalance(data, start, startDate, today = null) {
   if (start === null) return { ...data, balance: null };
   if (!Number.isSafeInteger(start) || Math.abs(start) > MAX_CENTS) throw new Error('Enter your balance.');
   if (!isValidISO(startDate)) throw new Error('Pick a date.');
+  if (today && startDate > today) throw new Error("The date can't be in the future.");
   return { ...data, balance: { start, startDate } };
+}
+
+/**
+ * Set the balance from what the bank says right now. Anything already logged today is part of
+ * that number, so the start-of-day balance is the typed amount minus today's logged changes.
+ */
+export function setBalanceNow(data, actual, today) {
+  let todayNet = 0;
+  for (const t of data.transactions) if (t.date === today) todayNet += t.amount;
+  return setBalance(data, actual - todayNet, today, today);
 }
 
 // Pay
@@ -122,6 +131,14 @@ export function setPay(data, pay, today) {
     anchor = today;
   }
   if (!isValidISO(anchor)) throw new Error('Pick your next payday.');
+  // Same schedule (only the amount changed)? Keep it, so an unanswered payday still asks.
+  const old = data.pay;
+  if (old && old.frequency === frequency) {
+    const same = frequency === 'semimonthly'
+      ? (old.days ?? []).join() === days.join()
+      : paydaysBetween(old, anchor, anchor).length === 1;
+    if (same) return { ...data, pay: { ...old, amount } };
+  }
   const yesterday = addDays(today, -1);
   const prev = data.pay?.handledThrough;
   return {

@@ -231,6 +231,12 @@ function clearDemo() {
   store.setMode('real');
   state.mode = 'real';
   const res = store.load('data');
+  if (res.status !== 'ok' && res.status !== 'empty') {
+    // Never paper over data we could not read: show the recovery screen instead.
+    state.fatal = { kind: res.status, raw: res.raw ?? null };
+    render();
+    return;
+  }
   state.data = res.status === 'ok' ? res.data : defaultData({ today: state.today });
   runJobs();
   render();
@@ -280,6 +286,7 @@ function offerUpdate(worker) {
   toast('Update available, tap to refresh', {
     duration: Infinity,
     tapAnywhere: true,
+    sticky: true,
     action: {
       label: 'Refresh',
       run: () => {
@@ -363,8 +370,18 @@ function render({ restoreScroll = false } = {}) {
   const y = window.scrollY;
   state.screen = screen;
   state.step = null;
-  setHTML(root, html`${screen.render(ctx, route.params)}${tabbar(route.name)}`);
-  state.cleanup = screen.mount?.(root, ctx, route.params) ?? null;
+  try {
+    setHTML(root, html`${screen.render(ctx, route.params)}${tabbar(route.name)}`);
+    state.cleanup = screen.mount?.(root, ctx, route.params) ?? null;
+  } catch (err) {
+    // One broken screen must never lock you out of the app: keep the tab bar and Settings.
+    console.error(err);
+    setHTML(root, html`<main class="screen" id="main"><div class="card empty-card" role="alert">
+      <p><strong>Something went wrong showing this screen.</strong></p>
+      <p class="muted">Your data is safe. Try another tab, or open Settings.</p>
+      <button type="button" class="btn btn-quiet btn-sm" data-action="nav" data-to="settings">Open Settings</button>
+    </div></main>${tabbar(route.name)}`);
+  }
   window.scrollTo(0, restoreScroll ? scrollMemory.get(route.path) ?? 0 : y);
   updateBadge();
 }

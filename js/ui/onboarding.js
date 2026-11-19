@@ -5,7 +5,7 @@ import { appMark } from './brand.js';
 import { parseMoney, formatMoney, formatWholeMoney, centsToDecimal } from '../money.js';
 import { addDays } from '../dates.js';
 import { FREQUENCY_LABEL, suggestedLimit, monthlyPay, LAST_DAY, ordinal } from '../pay.js';
-import { setBalance, setPay, setBudget, setGoal } from '../actions.js';
+import { setBalanceNow, setPay, setBudget, setGoal } from '../actions.js';
 
 export const STEP_COUNT = 6; // welcome + 5 questions
 
@@ -242,7 +242,7 @@ export function applyDraft(ctx) {
   return (data) => {
     let next = { ...data };
     const bal = parseMoney(d.balance ?? '');
-    if (bal !== null && d.balance.trim()) next = setBalance(next, d.negative ? -Math.abs(bal) : Math.abs(bal), today);
+    if (bal !== null && d.balance.trim()) next = setBalanceNow(next, d.negative ? -Math.abs(bal) : Math.abs(bal), today);
     const pay = payFromDraft(d, today);
     if (pay) next = setPay(next, pay, today);
     const limit = amountOf(d.limit);

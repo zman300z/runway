@@ -169,14 +169,34 @@ function trapFocus(panel, e) {
   }
 }
 
+// Closing goes through history so the back gesture and the close button behave the same.
+// Closes asked for in the same moment (say, a picker and the sheet under it) are combined
+// into one history step, so the app never steps back further than the sheets it closes.
+let closeTarget = null; // lowest stack index asked to close in this tick
+let closeScheduled = false;
+let pendingDepth = null; // sheet depth history is heading to after a step we already started
+
 function requestClose(sheet) {
-  if (sheet.closed) return;
-  const top = stack[stack.length - 1];
-  if (top === sheet && (history.state?.sheetDepth ?? 0) === stack.length) {
-    history.back(); // popstate closes it
-  } else {
-    removeSheet(sheet);
+  const index = stack.indexOf(sheet);
+  if (sheet.closed || index === -1) return;
+  const depth = history.state?.sheetDepth ?? 0;
+  if (pendingDepth === null && depth !== stack.length) {
+    // History is out of step with the sheets (rare): close them directly.
+    for (const s of stack.slice(index).reverse()) removeSheet(s);
+    return;
   }
+  closeTarget = closeTarget === null ? index : Math.min(closeTarget, index);
+  if (closeScheduled) return;
+  closeScheduled = true;
+  queueMicrotask(() => {
+    closeScheduled = false;
+    const target = closeTarget;
+    closeTarget = null;
+    const base = pendingDepth ?? (history.state?.sheetDepth ?? 0);
+    if (target === null || target >= base) return; // already on its way out
+    pendingDepth = target;
+    history.go(target - base); // popstate closes this sheet and every sheet above it
+  });
 }
 
 async function removeSheet(sheet) {
@@ -198,6 +218,7 @@ async function removeSheet(sheet) {
 export function syncSheetsWithHistory(state) {
   const depth = state?.sheetDepth ?? 0;
   while (stack.length > depth) removeSheet(stack[stack.length - 1]);
+  if (pendingDepth !== null && depth <= pendingDepth) pendingDepth = null;
   if (pendingCloseAll && !stack.length) {
     pendingCloseAll();
     pendingCloseAll = null;
@@ -209,12 +230,16 @@ export function closeAllSheets() {
   if (!stack.length) return Promise.resolve();
   return new Promise((resolve) => {
     pendingCloseAll = resolve;
-    const depth = history.state?.sheetDepth ?? 0;
-    if (depth > 0) history.go(-depth);
+    const base = pendingDepth ?? (history.state?.sheetDepth ?? 0);
+    if (base > 0) {
+      pendingDepth = 0;
+      history.go(-base);
+    }
     setTimeout(() => {
       if (pendingCloseAll === resolve) {
         while (stack.length) removeSheet(stack[stack.length - 1]);
         pendingCloseAll = null;
+        pendingDepth = null;
         resolve();
       }
     }, 400);

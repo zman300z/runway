@@ -4,7 +4,7 @@ import {
   periodFor, shiftPeriod, addDays, diffDays, daysInPeriod, daysLeftInPeriod, daysElapsedInPeriod, maxDate,
 } from './dates.js';
 import { upcomingCharges } from './recurring.js';
-import { nextPayday, paydaysBetween, monthlyPay } from './pay.js';
+import { nextPayday, expectedPaydays, monthlyPay } from './pay.js';
 import { categoryMap, effectiveBucket } from './categories.js';
 
 export const DEFAULT_SPLIT = Object.freeze({ need: 50, want: 30, savings: 20 });
@@ -281,7 +281,7 @@ export function balanceSeries(data, today, days = 30) {
       charges.set(c.date, (charges.get(c.date) ?? 0) + c.amount);
       events.push({ date: c.date, kind: 'bill', name: c.name, amount: -c.amount });
     }
-    const paydays = new Set(paydaysBetween(data.pay, tomorrow, period.end));
+    const paydays = new Set(expectedPaydays(data.pay, tomorrow, period.end));
     for (const d of paydays) events.push({ date: d, kind: 'pay', name: 'Expected paycheck', amount: data.pay.amount });
     let p = bal;
     projection.push({ date: today, balance: p });
