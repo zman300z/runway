@@ -367,7 +367,7 @@ export function render(ctx) {
     ${statementBanner(ctx)}
     ${quarterBanner(ctx)}
     ${hero(s)}
-    ${s.mode === 'none' ? '' : html`<div class="tiles${s.hasCards ? ' stacked' : ''}">${monthTile(s)}${balanceTile(ctx, s)}</div>`}
+    ${s.mode === 'none' && !s.hasCards ? '' : html`<div class="tiles${s.hasCards ? ' stacked' : ''}">${monthTile(s)}${balanceTile(ctx, s)}</div>`}
     ${warningsSection(s)}
     ${backupBanner(ctx)}
     ${s.mode === 'none' ? '' : balanceCard(ctx)}

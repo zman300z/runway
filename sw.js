@@ -3,7 +3,7 @@
 // background and waits; the app shows "Update available, tap to refresh" and you choose when.
 // Your data is in localStorage, which updates never touch.
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const CACHE = `runway-${VERSION}`;
 
 // Every file the app needs. tests/repo.test.js fails if one is missing.

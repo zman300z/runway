@@ -3655,3 +3655,7 @@ button.cycle-mini {
 .card-links {
   margin-top: 28px;
 }
+
+.setup-card + .tiles {
+  margin-top: 12px;
+}
