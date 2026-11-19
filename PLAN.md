@@ -159,3 +159,8 @@ Budget month = calendar month, or "starts on day X" (1 to 28). Days left include
 - **2026-11-19** Limit warnings show as a Home card whenever a limit is at 80% or more, and as a one-time toast per limit, level and month when a change crosses the line. The toast waits for any Undo toast to finish.
 - **2026-11-19** Deleting a category or bill offers Undo for 5 seconds, but only if nothing else changed in between.
 - **2026-11-19** While a sheet is open, toasts appear at the top of the screen so they never cover the sheet's buttons.
+- **2026-11-19** Charts follow one validated system: 2px lines, bars at most 24px with a rounded data end, hairline grids, 2px gaps between slices. Every chart has a "Show as a table" view and never relies on color alone.
+- **2026-11-19** The balance chart shows its reading above the plot (like the Stocks app) instead of a floating tooltip, so your finger never covers the number. Arrow keys scrub too.
+- **2026-11-19** The category donut shows at most 6 slices: the top 5 plus "Other". Tapping a slice or its row opens Activity filtered to that category and month.
+- **2026-11-19** Needs, wants and savings use the colorblind-validated blue, orange and aqua. The default Coffee color changed to a richer brown that passes the checks.
+- **2026-11-19** Big numbers use the same system font as everything else (no rounded display face), per the spec's system font stack.

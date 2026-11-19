@@ -7,7 +7,7 @@ export const BUCKET_LABEL = { need: 'Need', want: 'Want', savings: 'Savings' };
 /** Colors offered for categories. Mid-tone hues that read well on light and dark cards. */
 export const CATEGORY_COLORS = [
   '#7C5CFA', '#2F9E44', '#1C7ED6', '#E8A400', '#0C9DB8', '#4263EB', '#F76707',
-  '#A0673A', '#D6336C', '#AE3EC9', '#5C7CFA', '#E03131', '#0CA678', '#868E96',
+  '#9A4F14', '#D6336C', '#AE3EC9', '#5C7CFA', '#E03131', '#0CA678', '#868E96',
 ];
 
 // [id, name, emoji, bucket, color]
@@ -19,7 +19,7 @@ const DEFAULTS = [
   ['phone', 'Phone', '📱', 'need', '#0C9DB8'],
   ['school', 'School', '🎓', 'need', '#4263EB'],
   ['eating-out', 'Eating Out', '🍔', 'want', '#F76707'],
-  ['coffee', 'Coffee', '☕', 'want', '#A0673A'],
+  ['coffee', 'Coffee', '☕', 'want', '#9A4F14'],
   ['shopping', 'Shopping', '🛍️', 'want', '#D6336C'],
   ['fun', 'Fun/Entertainment', '🎉', 'want', '#AE3EC9'],
   ['subscriptions', 'Subscriptions', '🔁', 'want', '#5C7CFA'],

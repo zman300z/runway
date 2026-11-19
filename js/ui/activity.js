@@ -53,10 +53,10 @@ export function render(ctx) {
       <input type="search" class="search-input" data-input="search" value="${f.q}" placeholder="Search notes and categories" aria-label="Search transactions" enterkeyhint="search" autocomplete="off">
     </div>
     <div class="filter-row" role="group" aria-label="Filters">
+      ${f.period ? html`<button type="button" class="chip filter-chip on" data-action="clear-period" aria-label="Remove month filter">${periodLabel(periodFor(f.period.start, f.period.startDay))}${icon('close')}</button>` : ''}
       ${chip(cat ? `${cat.emoji} ${cat.name}` : 'Category', 'filter-category', Boolean(cat))}
       ${chip(f.kind ? KIND_LABEL[f.kind] : 'Type', 'filter-kind', Boolean(f.kind))}
       ${chip(f.bucket ? BUCKET_FILTER_LABEL[f.bucket] : 'Need or want', 'filter-bucket', Boolean(f.bucket))}
-      ${f.period ? html`<button type="button" class="chip filter-chip on" data-action="clear-period" aria-label="Remove month filter">${periodLabel(periodFor(f.period.start, f.period.startDay))}${icon('close')}</button>` : ''}
       ${anyFilter ? html`<button type="button" class="link-btn sm" data-action="clear-filters">Clear</button>` : ''}
     </div>
     <div class="tx-list" id="tx-list">${list(ctx)}</div>

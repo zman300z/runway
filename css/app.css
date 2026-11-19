@@ -54,7 +54,14 @@
   --safe-right: env(safe-area-inset-right, 0px);
 
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Charts: hairline chrome and the three bucket colors (validated categorical slots 1 to 3). */
+  --grid: #e5e5ea;
+  --axis: #c7c7cc;
+  --need: #2a78d6;
+  --want: #eb6834;
+  --save: #1baf7a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -91,6 +98,11 @@
     --ring-good: #30d158;
     --ring-warn: #ff9f0a;
     --ring-bad: #ff453a;
+    --grid: #2c2c2e;
+    --axis: #48484a;
+    --need: #3987e5;
+    --want: #d95926;
+    --save: #199e70;
   }
 }
 
@@ -2604,4 +2616,478 @@ input.switch {
 body:has(.sheet-layer.open) .toast-region {
   top: calc(var(--safe-top) + 10px);
   bottom: auto;
+}
+
+/* Charts */
+
+.chart-card {
+  padding: 14px 14px 10px;
+}
+
+.chart {
+  position: relative;
+  width: 100%;
+  touch-action: pan-y;
+  outline-offset: 4px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.chart-svg {
+  display: block;
+  overflow: visible;
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-svg .grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart-svg .grid.zero {
+  stroke: var(--axis);
+}
+
+.chart-svg .tick {
+  fill: var(--text-2);
+  font-size: 11px;
+}
+
+.chart-svg .tick.strong {
+  fill: var(--text);
+  font-weight: 650;
+}
+
+.chart-svg .line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-svg .line.projected {
+  stroke-dasharray: 4 5;
+  opacity: 0.7;
+}
+
+.chart-svg .area {
+  fill: var(--accent);
+  opacity: 0.1;
+}
+
+.chart-svg .dot {
+  fill: var(--accent);
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+.chart-svg .today-rule {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.chart-svg .scrub-rule {
+  stroke: var(--text-2);
+  stroke-width: 1;
+}
+
+.chart-svg .bar {
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.chart-svg .bar-good {
+  fill: var(--ring-good);
+}
+
+.chart-svg .bar-bad {
+  fill: var(--ring-bad);
+}
+
+.chart-svg .bar:not(.is-selected) {
+  opacity: 0.45;
+}
+
+.chart-svg .bar-zero {
+  stroke: var(--axis);
+  stroke-width: 2;
+}
+
+.chart-svg .bar-value {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-svg .hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.chart-svg .slice {
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.chart-svg .slice:active {
+  opacity: 0.8;
+}
+
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 2px 6px;
+}
+
+.readout-value {
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.readout-date {
+  color: var(--text-2);
+  font-size: 0.88rem;
+}
+
+.chart-card.is-projected .readout-value {
+  color: var(--text-2);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 2px 0;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key-line {
+  display: inline-block;
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--accent);
+  border-radius: 1px;
+}
+
+.key-line.dashed {
+  border-top-style: dashed;
+  opacity: 0.8;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 4px;
+}
+
+.chart-empty svg.i {
+  width: 20px;
+  height: 20px;
+  color: var(--text-3);
+}
+
+.chart-table {
+  margin-top: 6px;
+  font-size: 0.86rem;
+}
+
+.chart-table summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--accent-text);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.chart-table summary::-webkit-details-marker {
+  display: none;
+}
+
+.chart-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.chart-table th,
+.chart-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--separator);
+  text-align: right;
+}
+
+.chart-table th:first-child,
+.chart-table td:first-child {
+  text-align: left;
+}
+
+.chart-table th {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* Insights */
+
+.month-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px 0 14px;
+}
+
+.month-label {
+  font-size: 1.12rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.insight-card + .insight-card {
+  margin-top: 14px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.card-head h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.card-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--text-2);
+  font-size: 0.92rem;
+}
+
+.card-sub strong {
+  color: var(--text);
+}
+
+.card-sub svg.i {
+  width: 18px;
+  height: 18px;
+}
+
+.donut-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 14px;
+}
+
+.donut-box {
+  position: relative;
+  width: 176px;
+  height: 176px;
+}
+
+.donut-box svg {
+  position: absolute;
+  inset: 0;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.donut-total {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.donut-caption {
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.legend-list,
+.split-legend,
+.limit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend-row,
+.split-legend li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 2px;
+  border: 0;
+  border-top: 1px solid var(--separator);
+  background: none;
+  text-align: left;
+  font-size: 0.94rem;
+  cursor: pointer;
+}
+
+.split-legend li {
+  cursor: default;
+}
+
+.legend-list li:first-child .legend-row,
+.split-legend li:first-child {
+  border-top: 0;
+}
+
+.swatch-dot {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 4px;
+  background: var(--sw, var(--fill-3));
+}
+
+.legend-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.legend-value {
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.legend-pct {
+  min-width: 3.2em;
+  text-align: right;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.seg-chart {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.seg-row {
+  display: grid;
+  grid-template-columns: 3.6rem 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.seg-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.seg-bar {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+}
+
+.seg {
+  display: flex;
+  align-items: center;
+  min-width: 3px;
+  padding-left: 6px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.74rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.seg b {
+  font-weight: 700;
+}
+
+.seg-need {
+  background: var(--need);
+}
+
+.seg-want {
+  background: var(--want);
+}
+
+.seg-savings {
+  background: var(--save);
+}
+
+.swatch-dot.seg-need,
+.swatch-dot.seg-want,
+.swatch-dot.seg-savings {
+  padding: 0;
+}
+
+.stat-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.stat-sub {
+  margin: 4px 0 6px;
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 650;
+  font-size: 0.92rem;
+}
+
+.delta svg.i {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
+}
+
+.limit-list li + li {
+  margin-top: 14px;
+}
+
+.limit-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-weight: 600;
 }
