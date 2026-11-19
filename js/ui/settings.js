@@ -68,7 +68,7 @@ export function render(ctx, params = []) {
         <li class="toggle-row">
           <span class="row-icon" style="--tint:#FF3B30">${icon('bell')}</span>
           <label class="row-label" for="badge-toggle">Show today's safe-to-spend on the app icon</label>
-          <input type="checkbox" switch class="switch" id="badge-toggle" data-input="badge" ${d.settings.badge ? 'checked' : ''}>
+          <label class="bill-switch"><input type="checkbox" switch class="switch" id="badge-toggle" data-input="badge" ${d.settings.badge ? 'checked' : ''}></label>
         </li>
       </ul>
       <p class="group-foot">Shows today's number in whole dollars on the Runway icon. It refreshes when you open the app, so it can be behind if you haven't opened Runway today. iPhone asks for notification permission because badges count as notifications. Runway never sends any.</p>` : ''}

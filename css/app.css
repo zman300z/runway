@@ -543,7 +543,7 @@ svg.i {
 
 .segmented .seg {
   flex: 1 1 0;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 10px;
   border: 0;
   border-radius: 9px;
@@ -565,7 +565,7 @@ svg.i {
 }
 
 .segmented.sm .seg {
-  min-height: 40px;
+  min-height: 44px;
   font-size: 0.86rem;
 }
 
@@ -771,7 +771,7 @@ svg.i {
 }
 
 .tile .btn-sm {
-  min-height: 40px;
+  min-height: 44px;
   margin-top: auto;
 }
 
@@ -815,7 +815,15 @@ svg.i {
 }
 
 .pace-pill {
+  position: relative;
   cursor: pointer;
+}
+
+/* The pill looks small but its tap area is 44px tall. */
+.pace-pill::after {
+  content: "";
+  position: absolute;
+  inset: -9px -4px;
 }
 
 .setup-card h2 {
@@ -992,7 +1000,7 @@ svg.i {
 
 .filter-chip {
   flex: none;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 12px 0 14px;
   font-size: 0.86rem;
 }
@@ -1401,6 +1409,9 @@ svg.i {
 
 .cat-name {
   max-width: 100%;
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto;
+  hyphens: auto;
   font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.15;
@@ -2767,7 +2778,7 @@ body:has(.sheet-layer.open) .toast-region {
   color: var(--text-2);
 }
 
-.key {
+.legend-key {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3023,7 +3034,7 @@ body:has(.sheet-layer.open) .toast-region {
   height: 28px;
 }
 
-.seg {
+.split-seg {
   display: flex;
   align-items: center;
   min-width: 3px;
@@ -3035,7 +3046,7 @@ body:has(.sheet-layer.open) .toast-region {
   white-space: nowrap;
 }
 
-.seg b {
+.split-seg b {
   font-weight: 700;
 }
 

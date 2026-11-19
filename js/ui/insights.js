@@ -97,7 +97,7 @@ function segmentBar(label, parts, scale) {
     <div class="seg-bar" role="img" aria-label="${label}: ${parts.filter((p) => p.value > 0).map((p) => `${p.name} ${p.text}`).join(', ')}">
       ${parts.filter((p) => p.value > 0).map((p) => {
         const pct = (p.value * 100) / scale;
-        return html`<span class="seg seg-${p.key}" style="width:${pct.toFixed(2)}%">${pct >= 13 ? html`<b>${p.text}</b>` : ''}</span>`;
+        return html`<span class="split-seg seg-${p.key}" style="width:${pct.toFixed(2)}%">${pct >= 13 ? html`<b>${p.text}</b>` : ''}</span>`;
       })}
     </div>
   </div>`;

@@ -82,6 +82,9 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
     // Opening the app (from the icon or a reload) always gets the cached page, online or not.
+    // Other pages in the folder (like the docs) go to the network as usual.
+    const scope = new URL(self.registration.scope).pathname;
+    if (url.pathname !== scope && url.pathname !== `${scope}index.html`) return;
     event.respondWith(
       caches.match('./index.html', { ignoreSearch: true }).then((cached) => cached || fetch(request)),
     );

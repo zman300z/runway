@@ -39,8 +39,8 @@ export function balanceCard(ctx) {
           </div>
           <div class="chart" data-chart="balance" tabindex="0" role="img" aria-label="${summary} Drag across the chart, or use the arrow keys, to see any day."></div>
           <div class="legend" aria-hidden="true">
-            <span class="key"><i class="key-line"></i>Balance</span>
-            <span class="key"><i class="key-line dashed"></i>Projected with bills and expected pay</span>
+            <span class="legend-key"><i class="key-line"></i>Balance</span>
+            <span class="legend-key"><i class="key-line dashed"></i>Projected with bills and expected pay</span>
           </div>
           <details class="chart-table">
             <summary>Show as a table</summary>
