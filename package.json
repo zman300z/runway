@@ -1,0 +1,13 @@
+{
+  "name": "runway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal spending tracker for iPhone. Plain HTML, CSS and JavaScript with zero dependencies.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "serve": "node tools/serve.js",
+    "icons": "node tools/make-icons.js",
+    "release": "node tools/release.js"
+  }
+}

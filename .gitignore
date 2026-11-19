@@ -1,0 +1,14 @@
+# Never commit real money data (backups and exports from the app)
+runway-backup-*.json
+runway-transactions-*.csv
+*.backup.json
+
+# Tooling that must never ship with the app
+node_modules/
+screenshots/
+.claude/settings.local.json
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
