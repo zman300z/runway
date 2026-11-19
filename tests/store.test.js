@@ -12,7 +12,7 @@ test('a fresh store is empty, and default data is valid', () => {
   const d = defaultData({ today: '2026-11-18', now: 1 });
   assert.deepEqual(validate(d), []);
   assert.equal(d.schemaVersion, SCHEMA_VERSION);
-  assert.equal(d.categories.length, 14);
+  assert.equal(d.categories.length, 15);
 });
 
 test('save then load gives back the same data', () => {
@@ -44,7 +44,7 @@ test('migrates v0 data (saved before schemaVersion existed) to v1', () => {
   assert.equal(res.status, 'ok');
   assert.equal(res.migratedFrom, 0);
   const d = res.data;
-  assert.equal(d.schemaVersion, 1);
+  assert.equal(d.schemaVersion, 2);
   assert.deepEqual(validate(d), []);
   assert.equal(d.transactions[0].amount, -450);
   assert.equal(d.transactions[0].note, '');
@@ -53,13 +53,13 @@ test('migrates v0 data (saved before schemaVersion existed) to v1', () => {
   assert.equal(d.recurring[0].anchor, '2026-11-01');
   assert.equal(d.recurring[0].active, true);
   assert.deepEqual(d.posted, ['spot:2026-11-01']);
-  assert.equal(d.categories.length, 14);
+  assert.equal(d.categories.length, 15);
   assert.deepEqual(d.settings, { badge: false });
   assert.equal(d.setupDone, true);
 
   // The original is kept, and the upgraded copy is saved.
   assert.equal(storage.getItem(`${KEYS.data}:pre-v0`), raw);
-  assert.equal(JSON.parse(storage.getItem(KEYS.data)).schemaVersion, 1);
+  assert.equal(JSON.parse(storage.getItem(KEYS.data)).schemaVersion, 2);
   // The rebuilt log means the Nov 1 charge does not post a second time.
   const { added } = postDueCharges(d, '2026-11-18', { makeId: idMaker(), now: 1 });
   assert.equal(added.length, 0);
@@ -105,7 +105,7 @@ test('export then import gives identical data', () => {
   const text = serializeBackup(original, { exportedAt: '2026-11-18T12:00:00.000Z', appVersion: '1.0.0' });
   const { data, counts, exportedAt } = parseBackup(text);
   assert.deepEqual(data, original);
-  assert.deepEqual(counts, { transactions: 7, bills: 4, categories: 14 });
+  assert.deepEqual(counts, { transactions: 7, bills: 4, categories: 15, cards: 0 });
   assert.equal(exportedAt, '2026-11-18T12:00:00.000Z');
   // A bare data object (no header) is accepted too.
   assert.deepEqual(parseBackup(JSON.stringify(original)).data, original);

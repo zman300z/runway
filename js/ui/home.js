@@ -4,10 +4,11 @@ import { html, raw } from './dom.js';
 import { icon } from './icons.js';
 import { helpButton } from './explain-sheet.js';
 import { bigMoney, lengthClass, safeColor, plural } from './format.js';
-import { txRow } from './activity.js';
+import { txRow, cardMap } from './activity.js';
 import { balanceCard, mountBalanceChart } from './balance-chart.js';
 import { backupBanner } from './backup.js';
 import { openQuickAdd } from './quickadd.js';
+import { openPayCard, confirmCardDue, openStatement, enterQuarterBonus } from './card-sheets.js';
 import { ringSVG } from '../charts.js';
 import { formatMoney, formatWholeMoney } from '../money.js';
 import { formatDate, diffDays, addDays } from '../dates.js';
@@ -15,7 +16,10 @@ import { categoryMap } from '../categories.js';
 import { byNewest } from '../search.js';
 import { upcomingCharges } from '../recurring.js';
 import { pendingPaydays } from '../pay.js';
-import { confirmPayday, markPaydayHandled } from '../actions.js';
+import { confirmPayday, markPaydayHandled, confirmStatement, dismissQuarterReminder } from '../actions.js';
+import {
+  activeCards, cardSummary, pendingPayments, pendingStatement, computedStatement, needsQuarterReminder, quarterOf,
+} from '../cards.js';
 import { PACE_LABEL } from '../explain.js';
 
 export const PACE_TONE = { ontrack: 'good', ahead: 'warn', over: 'bad' };
@@ -51,6 +55,65 @@ function paydayBanner(ctx) {
       <button type="button" class="btn btn-plain btn-sm" data-action="payday-no" data-date="${date}">Not paid</button>
     </div>
   </section>`;
+}
+
+// Credit card banners: payment due (like payday), statement closed, and the quarter reminder.
+
+function cardDueBanner(ctx) {
+  for (const card of activeCards(ctx.data)) {
+    const p = pendingPayments(ctx.data, card, ctx.today)[0];
+    if (!p) continue;
+    const today = p.due === ctx.today;
+    const when = today ? 'today' : formatDate(p.due, 'medium');
+    const title = card.autopay
+      ? `Autopay should have paid ${formatMoney(p.amount)} to ${card.name} ${today ? 'today' : `on ${when}`}. Confirm?`
+      : `Card payment due ${when}. How much left your bank?`;
+    return html`<section class="card payday card-due" aria-labelledby="card-due-title">
+      <div class="payday-top">
+        <span class="payday-emoji" aria-hidden="true">💳</span>
+        <div><h2 id="card-due-title">${title}</h2>
+        ${card.autopay ? '' : html`<p class="muted small">${card.name} statement balance: ${formatMoney(p.amount)}.</p>`}</div>
+      </div>
+      <div class="payday-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-action="card-due-yes" data-card="${card.id}" data-due="${p.due}">${card.autopay ? `Confirm ${formatMoney(p.amount)}` : `Paid ${formatMoney(p.amount)}`}</button>
+        <button type="button" class="btn btn-quiet btn-sm" data-action="card-due-other" data-card="${card.id}" data-due="${p.due}">Different amount</button>
+      </div>
+    </section>`;
+  }
+  return '';
+}
+
+function statementBanner(ctx) {
+  const cards = activeCards(ctx.data);
+  for (const card of cards) {
+    const closing = pendingStatement(card, ctx.today);
+    if (!closing) continue;
+    const amount = computedStatement(ctx.data, card, closing);
+    return html`<div class="banner banner-card" role="note">
+      ${icon('card')}
+      <span>${cards.length > 1 ? `${card.name} statement` : 'Statement'} closed. Check your card app and confirm the statement balance: <strong>${formatMoney(amount)}</strong></span>
+      <span class="banner-actions">
+        <button type="button" class="link-btn sm" data-action="statement-ok" data-card="${card.id}" data-closing="${closing}" data-amount="${amount}">Matches</button>
+        <button type="button" class="link-btn sm" data-action="statement-edit" data-card="${card.id}" data-closing="${closing}">Edit</button>
+      </span>
+    </div>`;
+  }
+  return '';
+}
+
+function quarterBanner(ctx) {
+  for (const card of activeCards(ctx.data)) {
+    if (!needsQuarterReminder(card, ctx.today, card.quarterSeen)) continue;
+    return html`<div class="banner banner-card" role="note">
+      ${icon('sparkle')}
+      <span>New quarter: activate your ${card.name} bonus categories in your card app, then enter them here.</span>
+      <span class="banner-actions">
+        <button type="button" class="link-btn sm" data-action="quarter-enter" data-card="${card.id}">Enter</button>
+        <button type="button" class="link-btn sm" data-action="quarter-done" data-card="${card.id}">Done</button>
+      </span>
+    </div>`;
+  }
+  return '';
 }
 
 function setupCard() {
@@ -116,7 +179,74 @@ function monthTile(s) {
   </div>`;
 }
 
+const CAP_TONE = { 0: 'good', 80: 'warn', 100: 'bad' };
+
+/** The slim "Card this cycle" bar, in the 80% and 100% colors. */
+export function cycleBar(c, { label = 'Card this cycle', link = true } = {}) {
+  if (!c.cap) return '';
+  const pct = Math.min(100, Math.floor((Math.max(0, c.cycleSpend) * 100) / c.cap));
+  const tone = CAP_TONE[c.capLevel];
+  const over = c.overCap > 0;
+  const inner = html`
+    <span class="cycle-text">
+      <span class="cycle-label">${label}</span>
+      <span class="cycle-value${c.capLevel === 100 ? ' tone-bad' : ''}">${over ? icon('alert') : ''}<strong>${formatMoney(c.cycleSpend)}</strong> of ${formatWholeMoney(c.cap)}${over ? `, ${formatMoney(c.overCap)} over` : ''}</span>
+    </span>
+    <span class="bar bar-slim" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span class="fill-${tone}" style="width:${pct}%"></span></span>`;
+  return link
+    ? html`<button type="button" class="cycle-mini" data-action="nav" data-to="card/${c.card.id}">${inner}</button>`
+    : html`<div class="cycle-mini">${inner}</div>`;
+}
+
+/** With a card: the bank balance, what the card is owed, and the bank once it's paid off. */
+function moneyTile(ctx, s) {
+  const cards = activeCards(ctx.data).map((card) => cardSummary(ctx.data, card, ctx.today));
+  const dueSoonest = cards.filter((c) => c.statementDue > 0 && c.due).sort((a, b) => (a.due < b.due ? -1 : 1))[0];
+  let dueText = 'Nothing owed';
+  if (dueSoonest) {
+    dueText = `${formatMoney(dueSoonest.statementDue)} due ${formatDate(dueSoonest.due, 'medium')}${dueSoonest.card.autopay ? ' by autopay' : ''}`;
+  } else if (s.owed > 0) {
+    const next = cards.filter((c) => c.owed > 0).sort((a, b) => (a.nextDue < b.nextDue ? -1 : 1))[0];
+    dueText = `Nothing due now. Next due ${formatDate(next.nextDue, 'medium')}`;
+  } else if (s.owed < 0) {
+    dueText = 'You have a credit on your card';
+  }
+  const many = cards.length > 1;
+  const negative = s.balance !== null && s.balance < 0;
+  return html`<div class="tile money-tile">
+    <div class="money-row">
+      <div class="tile-top"><span class="tile-label">Bank balance</span>${s.balance === null ? '' : helpButton('balance', 'How your bank balance is worked out')}</div>
+      ${s.balance === null
+        ? html`<p class="tile-hint">Add your bank balance so Runway never suggests money you don't have.</p>`
+        : html`<p class="money-big${negative ? ' tone-bad' : ''}">${formatMoney(s.balance)}</p>
+          ${negative ? html`<span class="pill bg-bad">${icon('alert')}Below zero</span>` : ''}
+          ${s.payday ? html`<p class="tile-sub">${paydayText(s.payday, ctx.today)}</p>` : ''}`}
+    </div>
+    <div class="money-row">
+      <div class="money-line">
+        <span class="tile-label">${s.owed < 0 ? 'Credit on card' : 'Credit card owed'}</span>${helpButton('owed', 'How what you owe on your card is worked out')}
+        <strong class="money-mid">${formatMoney(Math.abs(s.owed))}</strong>
+      </div>
+      <p class="tile-sub">${dueText}</p>
+      ${cards.map((c) => cycleBar(c, { label: many ? `${c.card.name} this cycle` : 'Card this cycle' }))}
+    </div>
+    ${s.balance === null ? '' : html`<div class="money-row">
+      <div class="money-line">
+        <span class="tile-label">After card is paid off</span>${helpButton('afterPayoff', 'How the balance after paying off your card is worked out')}
+        <strong class="money-after${s.afterPayoff < 0 ? ' tone-bad' : ''}">${formatMoney(s.afterPayoff)}</strong>
+      </div>
+    </div>`}
+    <div class="money-actions">
+      <button type="button" class="btn btn-quiet btn-sm" data-action="reconcile">${icon('refresh')}${s.balance === null ? 'Add balance' : 'Reconcile'}</button>
+      ${cards.length === 1
+        ? html`<button type="button" class="btn btn-quiet btn-sm" data-action="nav" data-to="card/${cards[0].card.id}">${icon('card')}Card details</button>`
+        : html`<button type="button" class="btn btn-quiet btn-sm" data-action="nav" data-to="settings">${icon('card')}Cards</button>`}
+    </div>
+  </div>`;
+}
+
 function balanceTile(ctx, s) {
+  if (s.hasCards) return moneyTile(ctx, s);
   if (s.balance === null) {
     return html`<div class="tile">
       <span class="tile-label">Balance</span>
@@ -135,12 +265,24 @@ function balanceTile(ctx, s) {
 }
 
 function warningsSection(s) {
-  if (!s.warnings.length) return '';
+  // A card's cap shows on its own bar in the balance tile, so only utilization is listed here.
+  const list = s.warnings.filter((w) => w.kind !== 'card');
+  if (!list.length) return '';
   return html`<section class="home-section" aria-labelledby="warn-title">
     <div class="section-head"><h2 id="warn-title">Heads up</h2></div>
     <ul class="card list-card warn-list">
-      ${s.warnings.map((w) => {
+      ${list.map((w) => {
         const pct = Math.min(100, Math.floor((Math.max(0, w.spent) * 100) / w.limit));
+        if (w.kind === 'utilization') {
+          return html`<li class="warn-row">
+            <span class="warn-icon bg-warn">${icon('card')}</span>
+            <div class="warn-text">
+              <p class="warn-title"><span>${w.name} utilization</span><span class="tone-warn strong">${w.pct}%</span></p>
+              <div class="bar" aria-hidden="true"><span class="fill-warn" style="width:${pct}%"></span></div>
+              <p class="warn-sub">Likely reported: ${formatWholeMoney(w.spent)} of a ${formatWholeMoney(w.limit)} limit. Under 30% is better for your credit score.</p>
+            </div>
+          </li>`;
+        }
         const over = w.level === 100;
         const title = w.kind === 'month' ? 'Monthly limit' : `${w.emoji} ${w.name}`;
         const status = over ? (w.over > 0 ? `Over by ${formatMoney(w.over)}` : 'Limit reached') : `${pct}% used`;
@@ -199,6 +341,7 @@ function savingsSection(ctx, s) {
 
 function recent(ctx) {
   const cats = categoryMap(ctx.data.categories);
+  const cards = cardMap(ctx.data);
   const latest = [...ctx.data.transactions].filter((t) => t.date <= ctx.today).sort(byNewest).slice(0, 5);
   return html`<section class="home-section" aria-labelledby="recent-title">
     <div class="section-head">
@@ -206,7 +349,7 @@ function recent(ctx) {
       ${latest.length ? html`<button type="button" class="link-btn" data-action="tab" data-to="activity">See all</button>` : ''}
     </div>
     ${latest.length
-      ? html`<ul class="card list-card tx-rows">${latest.map((t) => txRow(t, cats, { swipe: false }))}</ul>`
+      ? html`<ul class="card list-card tx-rows">${latest.map((t) => txRow(t, cats, { swipe: false, cards }))}</ul>`
       : html`<div class="card empty-card"><p class="muted">No purchases yet. Tap ${icon('plus', { label: 'plus' })} to log your first one.</p></div>`}
   </section>`;
 }
@@ -220,8 +363,11 @@ export function render(ctx) {
     </header>
     ${ctx.mode === 'demo' ? demoBanner() : ''}
     ${paydayBanner(ctx)}
+    ${cardDueBanner(ctx)}
+    ${statementBanner(ctx)}
+    ${quarterBanner(ctx)}
     ${hero(s)}
-    ${s.mode === 'none' ? '' : html`<div class="tiles">${monthTile(s)}${balanceTile(ctx, s)}</div>`}
+    ${s.mode === 'none' ? '' : html`<div class="tiles${s.hasCards ? ' stacked' : ''}">${monthTile(s)}${balanceTile(ctx, s)}</div>`}
     ${warningsSection(s)}
     ${backupBanner(ctx)}
     ${s.mode === 'none' ? '' : balanceCard(ctx)}
@@ -268,6 +414,27 @@ export const actions = {
     const date = el.dataset.date;
     ctx.update((d) => markPaydayHandled(d, date));
     ctx.toast('Okay. If it arrives later, log it with + as Income.');
+  },
+  'card-due-yes'(ctx, el) {
+    confirmCardDue(ctx, el.dataset.card, el.dataset.due);
+  },
+  'card-due-other'(ctx, el) {
+    openPayCard(ctx, el.dataset.card, { due: el.dataset.due });
+  },
+  'statement-ok'(ctx, el) {
+    const amount = Number(el.dataset.amount);
+    ctx.update((d) => confirmStatement(d, el.dataset.card, el.dataset.closing, amount));
+    ctx.toast(`Statement balance confirmed: ${formatMoney(amount)}`);
+  },
+  'statement-edit'(ctx, el) {
+    openStatement(ctx, el.dataset.card, el.dataset.closing);
+  },
+  'quarter-enter'(ctx, el) {
+    enterQuarterBonus(ctx, el.dataset.card);
+  },
+  'quarter-done'(ctx, el) {
+    ctx.update((d) => dismissQuarterReminder(d, el.dataset.card, quarterOf(ctx.today).key));
+    ctx.toast('Okay. See you next quarter.');
   },
   'move-to-savings'(ctx, el) {
     openQuickAdd(ctx, { preset: { type: 'expense', categoryId: el.dataset.category, amount: Number(el.dataset.amount), note: 'Moved to savings' } });

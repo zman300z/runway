@@ -96,3 +96,22 @@ export function novemberExample(over = {}) {
     ...over,
   });
 }
+
+/**
+ * A made-up credit card: statement closes on the 10th, payment due on the 7th, $2,000 limit and a
+ * $400 personal cap per statement cycle. As of Nov 18 the last closing (Nov 10) and the last
+ * due date (Nov 7) have both been answered.
+ */
+export function card(over = {}) {
+  return {
+    id: 'card1', name: 'Student Card', closingDay: 10, dueDay: 7, limit: 200000, cap: 40000,
+    openDate: '2026-09-01', autopay: false, startOwed: 0, startDate: '2026-09-01', statements: {},
+    handledDue: '2026-11-07', handledClose: '2026-11-10', quarterSeen: null, rewards: null, closed: false, createdAt: 0,
+    ...over,
+  };
+}
+
+/** Money from the bank pays a card. */
+export const cardPayment = (date, cents, cardId = 'card1') => base({ type: 'cardPayment', amount: cents, account: 'bank', cardId, date });
+/** Cash back redeemed as a statement credit on a card. */
+export const cashback = (date, cents, cardId = 'card1') => base({ type: 'cashback', amount: cents, account: cardId, date });

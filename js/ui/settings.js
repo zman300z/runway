@@ -11,14 +11,24 @@ import { FREQUENCY_LABEL, describeDays, nextPayday, monthlyPay, suggestedLimit, 
 import { setBalance, setPay, setBudget, setGoal, setSetting } from '../actions.js';
 import { APP_VERSION } from '../version.js';
 import { actions as backupActions, lastBackupText } from './backup.js';
+import { openCardForm } from './card-sheets.js';
+import { owedOn } from '../cards.js';
 
 /** The icon badge needs the Badging API and notification permission (home screen apps on iOS 16.4+). */
 const badgeSupported = () => 'setAppBadge' in navigator && 'Notification' in window;
 
 const TINT = {
   balance: '#34C759', reconcile: '#0A84FF', pay: '#FF9500', limit: '#5E5CE6', start: '#8E8E93',
-  split: '#30B0C7', goal: '#FF2D55', categories: '#AF52DE', demo: '#FFCC00',
+  split: '#30B0C7', goal: '#FF2D55', categories: '#AF52DE', demo: '#FFCC00', card: '#4263EB',
 };
+
+function cardValue(data, card, today) {
+  if (card.closed) return 'Closed';
+  const owed = owedOn(data, card, today);
+  if (owed > 0) return `${formatMoney(owed)} owed`;
+  if (owed < 0) return `${formatMoney(-owed)} credit`;
+  return 'Nothing owed';
+}
 
 function row(action, iconName, tint, label, value = '', to = null) {
   return html`<li><button type="button" class="row" data-action="${action}"${to ? html` data-to="${to}"` : ''}>
@@ -56,6 +66,13 @@ export function render(ctx, params = []) {
       ${row('edit-split', 'chart', TINT.split, 'Target split', `${s.need} / ${s.want} / ${s.savings}`)}
       ${row('edit-goal', 'sparkle', TINT.goal, 'Savings goal', d.goal ? `${d.goal.name}, ${formatWholeMoney(d.goal.target)}` : 'Not set')}
     </ul>
+
+    <h2 class="group-title">Credit cards</h2>
+    <ul class="card list-card">
+      ${(d.cards ?? []).map((c) => row('nav', 'card', TINT.card, c.name, cardValue(d, c, ctx.today), `card/${c.id}`))}
+      ${row('add-card', 'plus', TINT.card, (d.cards ?? []).length ? 'Add another card' : 'Add a credit card')}
+    </ul>
+    <p class="group-foot">Card purchases count as spending the day you make them. Your bank only feels them when you pay the card.</p>
 
     <h2 class="group-title">Organize</h2>
     <ul class="card list-card">
@@ -368,6 +385,7 @@ export const actions = {
   'edit-split': (ctx) => splitSheet(ctx),
   'edit-goal': (ctx) => goalSheet(ctx),
   'start-demo': (ctx) => ctx.startDemo(),
+  'add-card': (ctx) => openCardForm(ctx),
   ...backupActions,
   ...categoriesPage.actions,
 };

@@ -146,6 +146,48 @@ Budget month = calendar month, or "starts on day X" (1 to 28). Days left include
 | No console errors | Playwright collects errors across every screen |
 | No real data in repo | synthetic demo data only, .gitignore blocks backups, scan before pushing |
 
+## Phase 8: Credit cards (version 1.1.0, schemaVersion 2)
+
+**The core rule:** a card purchase is spending the day you make it, your bank only feels it on payment day, and the card payment itself is never spending.
+
+### What counts where
+
+| Thing | Spending (limit, categories, needs/wants, pace, safe to spend) | Bank balance | Card owed |
+|---|---|---|---|
+| Debit purchase | yes, on its date | down | no change |
+| Card purchase | yes, on its date | no change | up |
+| Refund to card | spending down | no change | down |
+| Card payment | never | down | down |
+| Cash back as statement credit | never (not income either) | no change | down |
+| Cash back to bank | income, source "Rewards" | up | no change |
+| Card Reconcile, "Interest or fees" | yes, category "Fees & interest" (Want) | no change | up |
+| Card Reconcile, "Not sure" | never (plain adjustment) | no change | up or down |
+
+### Card setup (generic, any number of cards)
+Name, statement closing day, payment due day (29th to 31st fall back to the last day of shorter months), credit limit, personal monthly cap, account open date, autopay (full statement balance) on or off, optional balance owed when added. Rewards per card: base rate, quarterly bonus windows typed in by hand (bonus %, spending cap, start and end dates, which Runway categories count), and a first-year match switch. A card with history is closed (hidden), never deleted.
+
+### The math (js/cards.js, pure)
+- **Statement balance:** what you owed at the last closing date (or the amount you confirmed from your card app), minus payments since. A statement's due date is the first due day after its closing date.
+- **New charges since statement:** total owed minus the statement balance still due. Paying more than the statement lowers new charges. Below zero owed shows as a credit.
+- **After card is paid off:** bank balance minus the total owed on every card.
+- **Balance guard:** a card payment due after today and before the next payday is subtracted from cash like a bill. A due date that passed without a confirmed payment is treated as already paid out of the bank (safe side) until you confirm it.
+- **Card this cycle:** card purchases minus card refunds since the last closing date, against your personal cap. Nudges at 80% and 100%; over the cap shows red with the amount over. Quick Add warns (never blocks) when a card purchase would pass the cap.
+- **Utilization:** what will likely be reported at the next closing (total owed, minus an autopay payment due before that closing) divided by the credit limit. Nudge above 30%.
+- **Cash back (estimate):** bonus rate on spending in the bonus categories inside each bonus window up to its cap, base rate on everything else. The first-year match doubles cash back on purchases made in the first 12 months. Always labeled as an estimate.
+
+### Screens
+- **Quick Add:** a one-tap Debit / Card chip in the existing row, only once a card exists. Debit is the default; Debit purchases stay 3 taps.
+- **Home Balance tile:** with a card, the tiles stack. Bank balance, "Credit card owed" with its due date, and the smaller "After card is paid off", each with a "?", plus a slim "Card this cycle: $X of $Y" bar (spent of your cap) using the 80% and 100% colors. Without a card, Home is exactly as before.
+- **Home banners:** payment due ("Autopay should have paid $X. Confirm?" or "How much left your bank?"), statement closed (a small banner, pre-filled with Runway's figure), and a start-of-quarter reminder to activate and enter bonus categories.
+- **Card page:** statement balance and due date, new charges, Pay card (any time, warns when paying less than the statement balance because the rest is charged interest), Card Reconcile (asks what the difference is from: interest or fees, purchases you forgot, or not sure), cash back logging, cycle cap bar, utilization, rewards estimate, recent card activity.
+- **Bills:** each bill charges Debit or a card. **Activity:** card items are labeled; card payments and cash back credits never count as spent. **CSV:** a payment method column.
+
+### Data model changes (schemaVersion 2)
+- `cards: [{ id, name, closingDay, dueDay, limit, cap, openDate, autopay, startOwed, startDate, statements: { closingDate: cents }, handledDue, handledClose, rewards: { baseBp, firstYearMatch, bonuses: [{ id, rateBp, cap, start, end, categoryIds }] } | null, closed }]`
+- Every transaction and bill gets `account`: "bank" or a card id. New transaction types: `cardPayment` (from bank to a card, `cardId`) and `cashback` (statement credit on a card). Rates are stored in basis points (1% = 100) so all math stays in whole numbers.
+- A new default category "Fees & interest" (Want).
+- Migration v1 to v2: every transaction and bill becomes "bank" (Debit), `cards` starts empty, the new category is added. Nothing else changes; the raw v1 copy is kept.
+
 ## Decision log
 
 - **2026-11-19** A transaction stores a bucket only when you flip it. Otherwise it follows its category, so changing a category from Need to Want updates past purchases you never flipped by hand.
@@ -170,3 +212,9 @@ Budget month = calendar month, or "starts on day X" (1 to 28). Days left include
 - **2026-11-19** The backup reminder appears 14 days after setup or after your last backup, and "Later" hides it for 3 days. Backups are blocked in demo mode so a demo file is never mistaken for yours.
 - **2026-11-19** Restoring a backup keeps a safety copy of the replaced data on the phone. After Erase everything, the app writes nothing more before it restarts at setup.
 - **2026-11-19** Final review fixes (1.0.1): paydays are never expected before the first payday you entered; balance dates can't be in the future; a balance typed "right now" (setup or Reconcile) already includes what you logged today; changing only the paycheck amount keeps unanswered paydays asking; closing stacked sheets happens in one history step; one broken screen can never lock you out of the app; the update prompt comes back if another message covers it.
+- **2026-11-19** Credit cards (Phase 8): a statement cycle runs from the day after one closing date through the next one, so a purchase on the closing day is on that statement and counts toward that cycle's cap. The "statement closed" banner shows from the closing day until you answer it.
+- **2026-11-19** A new card is watched from the day you add it: old closing and due dates never prompt. With "what you owe on it now", purchases count from that day; without it, from the account open date. A card with history can be closed (once paid off and with no bills on it) but never deleted, so past spending stays right.
+- **2026-11-19** With a card, the month tile and the money tile stack at full width. The cap shows on the slim "Card this cycle" bar and as one-time toasts at 80% and 100%; the Home "Heads up" list only adds utilization over 30%. Activity rows say "Card" when you have one card and the card's name when you have several.
+- **2026-11-19** Paying the card on or after a due date (with Pay card or the due banner) answers that date's prompt. "It wasn't paid" stops the prompt but the money still shows as owed. Payment dates can't be in the future.
+- **2026-11-19** Demo data includes a made-up "Student Card" with autopay, a cash back credit and two bills on it, so the card screens can be explored safely.
+- **2026-11-19** Credit cards (Phase 8): Card Reconcile asks what a difference is from. "Interest or fees" logs spending in a new "Fees & interest" category (Want), "Purchases I forgot to log" opens Quick Add on Card, "Not sure" makes a plain adjustment. Cash back to the bank is income under a new "Rewards" source. Confirming a statement amount changes the statement and new-charges split, never the total owed. With a card, Home shows a slim "Card this cycle" bar under the card line.

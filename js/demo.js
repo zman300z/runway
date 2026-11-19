@@ -5,6 +5,7 @@ import { addDays, addMonths, parseISO, toISO, weekday, daysInMonth } from './dat
 import { postDueCharges, newBill, pauseBill } from './recurring.js';
 import { paydaysBetween } from './pay.js';
 import { defaultData } from './store.js';
+import { owedOn, nextClosing, dueDateFor, lastClosing, quarterOf, quarterEnd } from './cards.js';
 
 export const DEMO_DAYS = 182;
 
@@ -85,29 +86,66 @@ export function buildDemoData(today, { now = Date.now() } = {}) {
   add({ categoryId: 'eating-out', amount: -1240, bucket: 'need', date: addDays(today, -20), note: 'Lunch between shifts' });
   add({ categoryId: 'eating-out', amount: 1850, date: addDays(today, -9), note: 'Roommate paid me back' });
 
-  // Bills and subscriptions. Hulu was cancelled (paused) about six weeks ago.
+  // A made-up student credit card, opened when the history starts. Eating out, shopping and fun
+  // go on the card (refunds from friends stay in the bank). Autopay pays each statement in full.
+  const q = quarterOf(today);
+  const card = {
+    id: 'demo-card', name: 'Student Card', closingDay: 12, dueDay: 9, limit: 150000, cap: 40000,
+    openDate: start, autopay: true, startOwed: 0, startDate: start, statements: {},
+    handledDue: null, handledClose: null, quarterSeen: q.key, closed: false, createdAt: now,
+    rewards: {
+      baseBp: 100,
+      firstYearMatch: true,
+      bonuses: [
+        { id: 'demo-bonus-prev', rateBp: 500, cap: 150000, start: quarterOf(addDays(q.start, -1)).start, end: addDays(q.start, -1), categoryIds: ['fun', 'transport'] },
+        { id: 'demo-bonus-now', rateBp: 500, cap: 150000, start: q.start, end: quarterEnd(today), categoryIds: ['eating-out', 'shopping'] },
+      ],
+    },
+  };
+  const ON_CARD = new Set(['eating-out', 'shopping', 'fun']);
+  for (const tx of transactions) tx.account = tx.type === 'expense' && tx.amount < 0 && ON_CARD.has(tx.categoryId) ? card.id : 'bank';
+  add({ type: 'cashback', account: card.id, amount: 1240, date: addDays(today, -50), note: 'Cash back credit' });
+
+  // Bills and subscriptions. Hulu was cancelled (paused) about six weeks ago. Spotify and
+  // Netflix charge the card.
   const firstOnDay = (day) => {
     const { y, m } = parseISO(start);
     const date = toISO(y, m, Math.min(day, daysInMonth(y, m)));
     return date < start ? addMonths(date, 1, day) : date;
   };
-  const bill = (id, name, amount, categoryId, cadence, next) =>
-    newBill({ name, amount, categoryId, cadence, next }, { id: `demo-bill-${id}`, now });
+  const bill = (id, name, amount, categoryId, cadence, next, account = 'bank') =>
+    newBill({ name, amount, categoryId, cadence, next, account }, { id: `demo-bill-${id}`, now });
   const bills = [
     bill('rent', 'Rent', 57500, 'rent', 'monthly', firstOnDay(1)),
     bill('phone', 'Phone plan', 4500, 'phone', 'monthly', firstOnDay(28)),
     bill('electric', 'Electric', 3800, 'bills', 'monthly', firstOnDay(18)),
-    bill('spotify', 'Spotify', 1199, 'subscriptions', 'monthly', firstOnDay(22)),
-    bill('netflix', 'Netflix', 1549, 'subscriptions', 'monthly', firstOnDay(9)),
+    bill('spotify', 'Spotify', 1199, 'subscriptions', 'monthly', firstOnDay(22), card.id),
+    bill('netflix', 'Netflix', 1549, 'subscriptions', 'monthly', firstOnDay(9), card.id),
     bill('icloud', 'iCloud+', 299, 'subscriptions', 'monthly', firstOnDay(14)),
     bill('prime', 'Prime Student', 6900, 'subscriptions', 'yearly', addDays(today, -100)),
     bill('hulu', 'Hulu', 999, 'subscriptions', 'monthly', firstOnDay(12)),
     bill('autosave', 'Auto-save', 5000, 'savings', 'monthly', firstOnDay(3)),
   ];
 
-  data = { ...data, transactions, recurring: bills };
+  data = { ...data, transactions, recurring: bills, cards: [card] };
   ({ data } = postDueCharges(data, addDays(today, -45), { now, makeId }));
   data = { ...data, recurring: data.recurring.map((b) => (b.id === 'demo-bill-hulu' ? pauseBill(b) : b)) };
   ({ data } = postDueCharges(data, today, { now, makeId }));
+
+  // Autopay: every statement that has come due was paid in full from the bank on its due date.
+  let lastDue = null;
+  for (let closing = nextClosing(card, start); closing <= today; closing = nextClosing(card, closing)) {
+    const due = dueDateFor(card, closing);
+    if (due > today) break;
+    const statement = owedOn(data, card, closing);
+    if (statement > 0) {
+      data.transactions.push({
+        id: makeId(), type: 'cardPayment', amount: statement, account: 'bank', cardId: card.id,
+        categoryId: null, bucket: null, source: null, note: '', date: due, createdAt: now, updatedAt: now,
+      });
+    }
+    lastDue = due;
+  }
+  data.cards = [{ ...card, handledDue: lastDue ?? addDays(today, -1), handledClose: lastClosing(card, today) }];
   return data;
 }

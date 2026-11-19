@@ -6,6 +6,7 @@ import {
 import { upcomingCharges } from './recurring.js';
 import { nextPayday, expectedPaydays, monthlyPay } from './pay.js';
 import { categoryMap, effectiveBucket } from './categories.js';
+import { bankEffect, cardPaymentsDue, cardSummary, activeCards, totalOwed } from './cards.js';
 
 export const DEFAULT_SPLIT = Object.freeze({ need: 50, want: 30, savings: 20 });
 
@@ -22,15 +23,16 @@ const perDay = (amount, days) => (amount > 0 ? Math.floor(amount / Math.max(1, d
 export const spendOf = (tx) => (tx.type === 'expense' ? -tx.amount : 0);
 
 /**
- * Balance at the end of `date`: the starting balance plus every transaction dated from the
- * start date through `date`. Earlier transactions were already in the starting balance.
+ * Bank balance at the end of `date`: the starting balance plus every bank transaction dated from
+ * the start date through `date` (earlier ones were already in the starting balance). Card
+ * purchases don't touch the bank; card payments do.
  */
 export function balanceOn(data, date) {
   if (!data.balance) return null;
   const { start, startDate } = data.balance;
   let total = start;
   for (const tx of data.transactions) {
-    if (tx.date >= startDate && tx.date <= date) total += tx.amount;
+    if (tx.date >= startDate && tx.date <= date) total += bankEffect(tx);
   }
   return total;
 }
@@ -67,6 +69,7 @@ function chargesBetween(data, from, to, cats) {
   return upcomingCharges(data.recurring, from, to).map((c) => ({
     ...c,
     savings: cats.get(c.categoryId)?.bucket === 'savings',
+    bank: (c.account ?? 'bank') === 'bank',
   }));
 }
 
@@ -97,14 +100,18 @@ export function summarize(data, today) {
   const payday = nextPayday(data.pay, today);
   const horizon = payday ?? period.nextStart; // first day NOT covered
   const lastCashDay = addDays(horizon, -1);
-  const billsSoon = chargesBetween(data, tomorrow, lastCashDay, cats);
+  // Only bills paid from the bank leave the bank; bills on a card wait for the card payment.
+  const billsSoon = chargesBetween(data, tomorrow, lastCashDay, cats).filter((c) => c.bank);
   const billsBeforeHorizon = sum(billsSoon, (c) => c.amount);
+  // Card payments due before payday come out of the bank like a bill.
+  const cardDueItems = balance === null ? [] : cardPaymentsDue(data, today, horizon);
+  const cardDue = sum(cardDueItems, (c) => c.amount);
   const futureOutflows = balance === null ? 0 : sum(
-    data.transactions.filter((t) => t.amount < 0 && t.date >= tomorrow && t.date <= lastCashDay
+    data.transactions.filter((t) => bankEffect(t) < 0 && t.date >= tomorrow && t.date <= lastCashDay
       && t.date >= data.balance.startDate),
-    (t) => -t.amount,
+    (t) => -bankEffect(t),
   );
-  const cash = balance === null ? null : balance - billsBeforeHorizon - futureOutflows;
+  const cash = balance === null ? null : balance - billsBeforeHorizon - cardDue - futureOutflows;
   const cashDays = diffDays(today, horizon);
   const cashDaily = cash === null ? null : perDay(cash, cashDays);
 
@@ -153,13 +160,16 @@ export function summarize(data, today) {
     totals, spent: totals.spent, income: totals.income, prevIncome: prevTotals.income,
     scheduled, scheduledSpend, scheduledAll,
     limit, budgetMonth, budgetDaily,
-    balance, payday, horizon, cashDays, billsSoon, billsBeforeHorizon, futureOutflows, cash, cashDaily,
+    balance, payday, horizon, cashDays, billsSoon, billsBeforeHorizon, cardDue, cardDueItems, futureOutflows, cash, cashDaily,
+    hasCards: activeCards(data).length > 0,
+    owed: totalOwed(data, today),
+    afterPayoff: balance === null ? null : balance - totalOwed(data, today),
     mode, month, daily, monthGuarded, dailyGuarded,
     pace,
     usedPct: limit === null ? null : Math.floor((Math.max(0, totals.spent) * 100) / limit),
     leftover: totals.income - (totals.outflow + scheduledAll),
     goal: goalProgress(data),
-    warnings: limitWarnings(data, totals),
+    warnings: [...limitWarnings(data, totals), ...cardWarnings(data, today)],
     split: splitSummary(data, totals),
   };
 }
@@ -186,6 +196,27 @@ export function limitWarnings(data, totals) {
       out.push({
         kind: 'category', key: `cat:${c.id}`, categoryId: c.id, name: c.name, emoji: c.emoji,
         level, spent, limit: c.limit, over: spent - c.limit,
+      });
+    }
+  }
+  return out;
+}
+
+/** 80% and 100% of each card's personal cap this statement cycle, and utilization over 30%. */
+export function cardWarnings(data, today) {
+  const out = [];
+  for (const card of activeCards(data)) {
+    const s = cardSummary(data, card, today);
+    if (s.capLevel) {
+      out.push({
+        kind: 'card', key: `card:${card.id}:${s.cycleStart}`, cardId: card.id, name: card.name,
+        level: s.capLevel, spent: s.cycleSpend, limit: s.cap, over: s.overCap,
+      });
+    }
+    if (s.utilizationHigh) {
+      out.push({
+        kind: 'utilization', key: `util:${card.id}:${s.cycleStart}`, cardId: card.id, name: card.name,
+        level: 80, spent: s.reported, limit: card.limit, over: 0, pct: s.utilization,
       });
     }
   }
@@ -262,7 +293,8 @@ export function balanceSeries(data, today, days = 30) {
   const from = maxDate(startDate, addDays(today, -(days - 1)));
   const net = new Map();
   for (const tx of data.transactions) {
-    if (tx.date >= startDate) net.set(tx.date, (net.get(tx.date) ?? 0) + tx.amount);
+    const effect = bankEffect(tx);
+    if (effect && tx.date >= startDate) net.set(tx.date, (net.get(tx.date) ?? 0) + effect);
   }
   let bal = start;
   for (const [date, amount] of net) if (date < from) bal += amount;
@@ -278,8 +310,16 @@ export function balanceSeries(data, today, days = 30) {
     const tomorrow = addDays(today, 1);
     const charges = new Map();
     for (const c of upcomingCharges(data.recurring, tomorrow, period.end)) {
+      if ((c.account ?? 'bank') !== 'bank') continue; // goes on a card, paid later
       charges.set(c.date, (charges.get(c.date) ?? 0) + c.amount);
       events.push({ date: c.date, kind: 'bill', name: c.name, amount: -c.amount });
+    }
+    // Card payments leave the bank on their due date (an unconfirmed late one, tomorrow).
+    for (const item of cardPaymentsDue(data, today, addDays(period.end, 1))) {
+      const date = item.late ? tomorrow : item.due;
+      if (date > period.end) continue;
+      charges.set(date, (charges.get(date) ?? 0) + item.amount);
+      events.push({ date, kind: 'card', name: `${item.name} payment`, amount: -item.amount });
     }
     const paydays = new Set(expectedPaydays(data.pay, tomorrow, period.end));
     for (const d of paydays) events.push({ date: d, kind: 'pay', name: 'Expected paycheck', amount: data.pay.amount });

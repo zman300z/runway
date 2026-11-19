@@ -13,6 +13,13 @@ import {
 } from '../recurring.js';
 import { categoryMap } from '../categories.js';
 import { addBill, updateBill, setBillActive, deleteBill, runDailyJobs } from '../actions.js';
+import { activeCards, findCard } from '../cards.js';
+
+/** " · on Student Card" for a bill or charge that goes on a card. */
+function onCard(data, account) {
+  const card = account && account !== 'bank' ? findCard(data, account) : null;
+  return card ? ` · on ${card.name}` : '';
+}
 
 const AND = new Intl.ListFormat('en', { type: 'conjunction' });
 
@@ -25,10 +32,10 @@ function inDays(date, today) {
   return `in ${n} days`;
 }
 
-function billRow(b, cats, today) {
+function billRow(b, cats, data) {
   const cat = cats.get(b.categoryId);
   const sub = b.active
-    ? `${formatMoney(b.amount)} ${CADENCE_LABEL[b.cadence].toLowerCase()} · next ${formatDate(b.next, 'short')}`
+    ? `${formatMoney(b.amount)} ${CADENCE_LABEL[b.cadence].toLowerCase()} · next ${formatDate(b.next, 'short')}${onCard(data, b.account)}`
     : `${formatMoney(b.amount)} ${CADENCE_LABEL[b.cadence].toLowerCase()} · paused, saves ${formatMoney(yearlyCost(b))} a year`;
   return html`<li class="bill-row${b.active ? '' : ' paused'}">
     <button type="button" class="row bill-main" data-action="edit-bill" data-id="${b.id}">
@@ -73,12 +80,12 @@ export function render(ctx) {
         ${soon.length
           ? html`<ul class="card list-card">${soon.map((c) => html`<li><button type="button" class="row" data-action="edit-bill" data-id="${c.billId}">
               <span class="tx-icon" style="--cat:${safeColor(cats.get(c.categoryId)?.color)}" aria-hidden="true">${cats.get(c.categoryId)?.emoji ?? '🔁'}</span>
-              <span class="row-label">${c.name}<span class="row-sub">${formatDate(c.date, 'medium')}, ${inDays(c.date, ctx.today)}</span></span>
+              <span class="row-label">${c.name}<span class="row-sub">${formatDate(c.date, 'medium')}, ${inDays(c.date, ctx.today)}${onCard(ctx.data, c.account)}</span></span>
               <span class="row-value strong">${formatMoney(c.amount)}</span>
             </button></li>`)}</ul>`
           : html`<div class="card empty-card"><p class="muted">Nothing due in the next 7 days.</p></div>`}
-        ${active.length ? html`<div class="section-head"><h2>Active</h2></div><ul class="card list-card">${active.map((b) => billRow(b, cats, ctx.today))}</ul>` : ''}
-        ${paused.length ? html`<div class="section-head"><h2>Paused</h2></div><ul class="card list-card">${paused.map((b) => billRow(b, cats, ctx.today))}</ul>` : ''}
+        ${active.length ? html`<div class="section-head"><h2>Active</h2></div><ul class="card list-card">${active.map((b) => billRow(b, cats, ctx.data))}</ul>` : ''}
+        ${paused.length ? html`<div class="section-head"><h2>Paused</h2></div><ul class="card list-card">${paused.map((b) => billRow(b, cats, ctx.data))}</ul>` : ''}
         <p class="group-foot">Switch a bill off to pause it and see what cutting it would save. Paused bills don't post charges.</p>`}
   </main>`;
 }
@@ -98,7 +105,13 @@ function billSheet(ctx, id = null) {
     categoryId: b?.categoryId ?? defaultCat.id,
     cadence: b?.cadence ?? 'monthly',
     next: b?.next ?? '',
+    account: b?.account ?? 'bank',
   };
+  const cards = activeCards(ctx.data);
+  if (st.account !== 'bank' && !cards.some((c) => c.id === st.account)) {
+    const closed = findCard(ctx.data, st.account);
+    if (closed) cards.push(closed);
+  }
 
   function headsUp() {
     if (!st.next) return '';
@@ -126,6 +139,10 @@ function billSheet(ctx, id = null) {
       ${field('Next charge', html`<input type="date" class="field-input" value="${st.next}" data-input="next" aria-label="Next charge date">`)}
       <div class="heads-up" aria-live="polite">${headsUp()}</div>
       ${field('Category', html`<select class="field-input" data-input="category" aria-label="Category">${cats.map((c) => html`<option value="${c.id}" ${st.categoryId === c.id ? 'selected' : ''}>${c.emoji} ${c.name}</option>`)}</select>`)}
+      ${cards.length ? field('Pay with', html`<select class="field-input" data-input="account" aria-label="Pay with">
+          <option value="bank" ${st.account === 'bank' ? 'selected' : ''}>Debit (bank)</option>
+          ${cards.map((c) => html`<option value="${c.id}" ${st.account === c.id ? 'selected' : ''}>${c.name}</option>`)}
+        </select>`, 'On a card, it counts as spending on its date. Your bank pays it when you pay the card.') : ''}
       ${errorLine()}
       <button type="button" class="btn btn-primary btn-block" data-action="save">${b ? 'Save' : 'Add bill'}</button>
       ${b ? html`<button type="button" class="btn btn-plain btn-block btn-danger" data-action="delete">${icon('trash')}Delete bill</button>` : ''}
@@ -134,6 +151,7 @@ function billSheet(ctx, id = null) {
       name: (el) => { st.name = el.value; },
       amount: (el) => { st.amount = el.value; },
       category: (el) => { st.categoryId = el.value; },
+      account: (el) => { st.account = el.value; },
       next(el, e, sh) {
         st.next = el.value;
         sh.body.querySelector('.heads-up').innerHTML = String(headsUp());
@@ -147,7 +165,7 @@ function billSheet(ctx, id = null) {
       save() {
         const amount = readMoney(st.amount);
         if (!amount || Number.isNaN(amount) || amount <= 0) return showFormError(sheet.body, 'Enter an amount.');
-        const fields = { name: st.name, amount, categoryId: st.categoryId, cadence: st.cadence, next: st.next };
+        const fields = { name: st.name, amount, categoryId: st.categoryId, cadence: st.cadence, next: st.next, account: st.account };
         let added = [];
         try {
           ctx.update((d) => {

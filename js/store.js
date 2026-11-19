@@ -1,13 +1,13 @@
 // Data storage: load, save, migrate, validate, back up and restore.
 // The storage object is passed in: browser storage in the app, an in-memory fake in tests.
 // Golden rule: never overwrite data we could not read. Keep it and offer a way out instead.
-import { defaultCategories, BUCKETS } from './categories.js';
+import { defaultCategories, BUCKETS, FEES_CATEGORY } from './categories.js';
 import { isValidISO, clampStartDay } from './dates.js';
 import { DEFAULT_SPLIT } from './budget.js';
 import { CADENCES, postedKey } from './recurring.js';
 import { FREQUENCIES } from './pay.js';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const KEYS = Object.freeze({
   data: 'runway:data', // your data, the only thing a backup contains
@@ -16,7 +16,7 @@ export const KEYS = Object.freeze({
   mode: 'runway:mode', // "demo" while demo data is showing
 });
 
-const TX_TYPES = ['expense', 'income', 'adjustment'];
+const TX_TYPES = ['expense', 'income', 'adjustment', 'cardPayment', 'cashback'];
 
 export class StoreError extends Error {
   constructor(code, message, info) {
@@ -45,6 +45,7 @@ export function defaultData({ today = null, now = Date.now() } = {}) {
     transactions: [],
     recurring: [],
     posted: [],
+    cards: [],
     settings: { badge: false },
     meta: { createdAt: now, lastBackupAt: null, lastOpened: today },
   };
@@ -100,7 +101,22 @@ function v0ToV1(old) {
   };
 }
 
-export const MIGRATIONS = [{ from: 0, to: 1, up: v0ToV1 }];
+/** v1 to v2: credit cards. Everything logged before cards existed was paid from the bank (Debit). */
+function v1ToV2(old) {
+  const categories = Array.isArray(old.categories) && old.categories.length ? old.categories : defaultCategories();
+  return {
+    ...old,
+    cards: [],
+    categories: categories.some((c) => c.id === FEES_CATEGORY.id) ? categories : [...categories, { ...FEES_CATEGORY }],
+    transactions: (Array.isArray(old.transactions) ? old.transactions : []).map((t) => ({ ...t, account: 'bank' })),
+    recurring: (Array.isArray(old.recurring) ? old.recurring : []).map((b) => ({ ...b, account: 'bank' })),
+  };
+}
+
+export const MIGRATIONS = [
+  { from: 0, to: 1, up: v0ToV1 },
+  { from: 1, to: 2, up: v1ToV2 },
+];
 
 /** Upgrade data step by step to `target`. Pure: the input is never changed. */
 export function migrate(data, migrations = MIGRATIONS, target = SCHEMA_VERSION) {
@@ -179,12 +195,37 @@ export function validate(data) {
     });
   }
 
+  const cardIds = new Set();
+  const dayOk = (d) => Number.isInteger(d) && d >= 1 && d <= 31;
+  const rewardsOk = (r) => r === null || (isObj(r) && Number.isSafeInteger(r.baseBp) && r.baseBp >= 0
+    && typeof r.firstYearMatch === 'boolean' && Array.isArray(r.bonuses)
+    && r.bonuses.every((b) => isObj(b) && typeof b.id === 'string' && Number.isSafeInteger(b.rateBp) && b.rateBp >= 0
+      && Number.isSafeInteger(b.cap) && b.cap >= 0 && isValidISO(b.start) && isValidISO(b.end) && Array.isArray(b.categoryIds)));
+  if (!Array.isArray(data.cards)) {
+    err('Cards are missing.');
+  } else {
+    data.cards.forEach((c, i) => {
+      const ok = isObj(c) && typeof c.id === 'string' && c.id !== 'bank' && typeof c.name === 'string'
+        && dayOk(c.closingDay) && dayOk(c.dueDay) && Number.isSafeInteger(c.limit) && c.limit >= 0
+        && (c.cap === null || (Number.isSafeInteger(c.cap) && c.cap >= 0)) && isValidISO(c.openDate) && isValidISO(c.startDate)
+        && Number.isSafeInteger(c.startOwed) && typeof c.autopay === 'boolean' && isObj(c.statements)
+        && Object.entries(c.statements).every(([k, v]) => isValidISO(k) && Number.isSafeInteger(v)) && rewardsOk(c.rewards);
+      if (ok) cardIds.add(c.id);
+      else err(`Card ${i + 1} is malformed.`);
+    });
+  }
+  const accountOk = (a) => a === 'bank' || cardIds.has(a);
+
   if (!Array.isArray(data.transactions)) {
     err('Transactions are missing.');
   } else {
     data.transactions.forEach((t, i) => {
+      const account = t?.account ?? 'bank';
       if (!isObj(t) || typeof t.id !== 'string' || !TX_TYPES.includes(t.type) || !Number.isSafeInteger(t.amount)
-        || !isValidISO(t.date)) {
+        || !isValidISO(t.date) || !accountOk(account)
+        || (t.type === 'income' && account !== 'bank')
+        || (t.type === 'cardPayment' && !(cardIds.has(t.cardId) && t.amount > 0 && account === 'bank'))
+        || (t.type === 'cashback' && !(t.amount > 0 && cardIds.has(account)))) {
         err(`Transaction ${i + 1} is malformed.`);
       }
     });
@@ -196,7 +237,7 @@ export function validate(data) {
     data.recurring.forEach((r, i) => {
       if (!isObj(r) || typeof r.id !== 'string' || typeof r.name !== 'string' || !Number.isSafeInteger(r.amount)
         || r.amount <= 0 || !CADENCES.includes(r.cadence) || !isValidISO(r.anchor) || !isValidISO(r.next)
-        || typeof r.active !== 'boolean') {
+        || typeof r.active !== 'boolean' || !accountOk(r.account ?? 'bank')) {
         err(`Bill ${i + 1} is malformed.`);
       }
     });
@@ -340,7 +381,12 @@ export function createStore(storage) {
 // Backups
 
 export function countData(data) {
-  return { transactions: data.transactions.length, bills: data.recurring.length, categories: data.categories.length };
+  return {
+    transactions: data.transactions.length,
+    bills: data.recurring.length,
+    categories: data.categories.length,
+    cards: (data.cards ?? []).length,
+  };
 }
 
 /** A backup file: your data plus a small header. */

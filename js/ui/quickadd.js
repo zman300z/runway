@@ -1,14 +1,16 @@
 // Quick Add: log a purchase in 3 taps (+, a category, Save) plus typing the amount.
-// The same sheet edits an existing transaction.
+// The same sheet edits an existing transaction. Once a card exists, a one-tap chip switches
+// between Debit (the default) and each card.
 import { html } from './dom.js';
 import { icon } from './icons.js';
 import { openSheet, closeAllSheets } from './sheet.js';
 import { keypadHTML, bindKeypad } from './keypad.js';
 import { breakable, safeColor, lengthClass } from './format.js';
-import { keypadPress, entryToCents, centsToEntry, formatEntry, formatMoney } from '../money.js';
+import { keypadPress, entryToCents, centsToEntry, formatEntry, formatMoney, formatWholeMoney } from '../money.js';
 import { topCategories, categoryMap, INCOME_SOURCES, BUCKET_LABEL, incomeSource } from '../categories.js';
 import { relativeDay } from '../dates.js';
 import { addTransaction, updateTransaction, deleteTransaction, restoreTransaction } from '../actions.js';
+import { activeCards, findCard, capPreview } from '../cards.js';
 
 const TYPES = [
   ['expense', 'Expense'],
@@ -25,6 +27,7 @@ function startState(tx, preset, today) {
     return {
       type, entry: centsToEntry(tx.amount), categoryId: tx.categoryId, bucket: tx.bucket,
       source: tx.source ?? 'paycheck', note: tx.note ?? '', date: tx.date, negative: tx.amount < 0,
+      account: tx.account ?? 'bank',
     };
   }
   return {
@@ -36,10 +39,11 @@ function startState(tx, preset, today) {
     note: preset.note ?? '',
     date: preset.date ?? today,
     negative: false,
+    account: preset.account ?? 'bank',
   };
 }
 
-export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {}) {
+export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null, hint = null } = {}) {
   const editing = Boolean(tx);
   const s = startState(tx, preset, ctx.today);
   const fromBill = Boolean(tx?.recurringId);
@@ -50,6 +54,38 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
   const cents = () => entryToCents(s.entry);
   const needsCategory = () => s.type === 'expense' || s.type === 'refund';
   const ready = () => cents() > 0 && (!needsCategory() || Boolean(cats().get(s.categoryId)));
+
+  // Debit first, then each open card (plus a closed one this purchase is already on).
+  function accounts() {
+    const ids = ['bank', ...activeCards(ctx.data).map((c) => c.id)];
+    if (s.account !== 'bank' && !ids.includes(s.account) && findCard(ctx.data, s.account)) ids.push(s.account);
+    return ids;
+  }
+  const payCard = () => (needsCategory() && s.account !== 'bank' ? findCard(ctx.data, s.account) : null);
+  /** Where the money comes from when saved: income is always the bank. */
+  function accountForSave() {
+    if (needsCategory()) return s.account;
+    if (s.type === 'adjustment') return tx?.account ?? 'bank';
+    return 'bank';
+  }
+
+  function accountChip() {
+    if (!needsCategory() || accounts().length < 2) return '';
+    const card = payCard();
+    const label = card ? card.name : 'Debit';
+    return html`<button type="button" class="chip pay-chip${card ? ' on' : ''}" data-action="toggle-account" aria-label="Paid with ${label}. Tap to switch.">
+      ${icon(card ? 'card' : 'bank')}<span class="chip-text">${label}</span>
+    </button>`;
+  }
+
+  /** A heads-up (never a block) when a card purchase would go past your cap this cycle. */
+  function capNote() {
+    const card = payCard();
+    if (!card || s.type !== 'expense' || !(cents() > 0)) return '';
+    const p = capPreview(ctx.data, card, s.date, cents(), editing ? tx.id : null);
+    if (!p || p.after <= p.cap) return '';
+    return `Heads-up: this puts ${card.name} at ${formatMoney(p.after)} of your ${formatWholeMoney(p.cap)} cap this cycle, ${formatMoney(p.over)} over.`;
+  }
 
   function signedAmount() {
     const c = cents();
@@ -67,7 +103,10 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
 
   function caption() {
     if (s.type === 'income') return `${incomeSource(s.source).emoji} ${incomeSource(s.source).name}`;
-    if (s.type === 'adjustment') return s.negative ? 'Lowers your balance' : 'Raises your balance';
+    if (s.type === 'adjustment') {
+      if (tx?.account && tx.account !== 'bank') return s.negative ? 'Raises what you owe on the card' : 'Lowers what you owe on the card';
+      return s.negative ? 'Lowers your balance' : 'Raises your balance';
+    }
     const cat = cats().get(s.categoryId);
     if (!cat) return 'Pick a category';
     if (cat.bucket === 'savings') return s.type === 'refund' ? `Back out of ${cat.emoji} ${cat.name}` : `${cat.emoji} ${cat.name} · counts toward your goal`;
@@ -122,6 +161,8 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
           <p class="qa-caption">${caption()}</p>
         </div>
         ${fromBill ? html`<p class="qa-note-bill">${icon('info')}Posted by a bill. Edits change only this charge.</p>` : ''}
+        ${hint ? html`<p class="qa-note-bill">${icon('info')}${hint}</p>` : ''}
+        <p class="qa-cap" role="status" ${capNote() ? '' : 'hidden'}>${icon('alert')}<span>${capNote()}</span></p>
         ${needsCategory() || s.type === 'income'
           ? html`<div class="qa-section">
               <div class="qa-section-head">
@@ -133,6 +174,7 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
           : ''}
         <div class="qa-row">
           ${bucketRow()}
+          ${accountChip()}
           <label class="chip date-chip">
             ${icon('calendar')}<span>${relativeDay(s.date, ctx.today)}</span>
             <input type="date" data-input="date" value="${s.date}" max="${maxDate}" aria-label="Date">
@@ -156,6 +198,12 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
     const save = sheet.body.querySelector('.qa-save');
     save.textContent = saveLabel();
     save.disabled = !ready();
+    const cap = sheet.body.querySelector('.qa-cap');
+    if (cap) {
+      const text = capNote();
+      cap.hidden = !text;
+      cap.querySelector('span').textContent = text;
+    }
   }
 
   function rerender() {
@@ -176,7 +224,7 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
       return;
     }
     saving = true;
-    const fields = { note: s.note, date: s.date, amount: signedAmount() };
+    const fields = { note: s.note, date: s.date, amount: signedAmount(), account: accountForSave() };
     if (s.type === 'income') Object.assign(fields, { type: 'income', source: s.source });
     else if (s.type === 'adjustment') fields.type = 'adjustment';
     else Object.assign(fields, { type: 'expense', categoryId: s.categoryId, bucket: s.bucket });
@@ -193,7 +241,8 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
         ctx.toast('Saved');
       } else {
         const what = s.type === 'income' ? incomeSource(s.source).name : cats().get(s.categoryId)?.name ?? '';
-        ctx.toast(`Added ${formatMoney(Math.abs(fields.amount))} · ${what}`, {
+        const card = payCard();
+        ctx.toast(`Added ${formatMoney(Math.abs(fields.amount))} · ${what}${card ? ` · on ${card.name}` : ''}`, {
           action: { label: 'Undo', run: () => ctx.update((d) => deleteTransaction(d, saved.id).data) },
           duration: 5000,
         });
@@ -263,6 +312,11 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
       'set-type'(el) {
         if (s.type === el.dataset.type) return;
         s.type = el.dataset.type;
+        rerender();
+      },
+      'toggle-account'() {
+        const ids = accounts();
+        s.account = ids[(ids.indexOf(s.account) + 1) % ids.length];
         rerender();
       },
       'pick-category'(el) {

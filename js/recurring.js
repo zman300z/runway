@@ -99,6 +99,7 @@ function chargeTransaction(bill, date, id, now) {
     id,
     type: 'expense',
     amount: -bill.amount,
+    account: bill.account ?? 'bank',
     categoryId: bill.categoryId,
     bucket: null,
     source: null,
@@ -112,8 +113,8 @@ function chargeTransaction(bill, date, id, now) {
 }
 
 /** A new bill. Its schedule is anchored on the first charge date. */
-export function newBill({ name, amount, categoryId, cadence, next }, { id = newId(), now = Date.now() } = {}) {
-  return { id, name: String(name).trim(), amount, categoryId, cadence, anchor: next, next, active: true, createdAt: now };
+export function newBill({ name, amount, categoryId, cadence, next, account = 'bank' }, { id = newId(), now = Date.now() } = {}) {
+  return { id, name: String(name).trim(), amount, categoryId, account, cadence, anchor: next, next, active: true, createdAt: now };
 }
 
 /**
@@ -125,6 +126,7 @@ export function editBill(bill, changes) {
   if (changes.name !== undefined) out.name = String(changes.name).trim();
   if (changes.amount !== undefined) out.amount = changes.amount;
   if (changes.categoryId !== undefined) out.categoryId = changes.categoryId;
+  if (changes.account !== undefined) out.account = changes.account;
   const nextChanged = changes.next !== undefined && changes.next !== bill.next;
   const cadenceChanged = changes.cadence !== undefined && changes.cadence !== bill.cadence;
   if (nextChanged || cadenceChanged) {
@@ -181,7 +183,7 @@ export function upcomingCharges(bills, from, to) {
   const out = [];
   for (const bill of bills) {
     for (const date of billChargesBetween(bill, from, to)) {
-      out.push({ billId: bill.id, name: bill.name, amount: bill.amount, categoryId: bill.categoryId, date });
+      out.push({ billId: bill.id, name: bill.name, amount: bill.amount, categoryId: bill.categoryId, account: bill.account ?? 'bank', date });
     }
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.name.localeCompare(b.name)));

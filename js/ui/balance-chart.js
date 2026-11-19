@@ -14,16 +14,18 @@ function readout(point, today) {
 
 export function balanceCard(ctx) {
   const series = balanceSeries(ctx.data, ctx.today);
+  const withCards = ctx.summary.hasCards;
+  const title = withCards ? 'Bank balance over time' : 'Balance over time';
   if (!series) {
     return html`<section class="home-section" aria-labelledby="bal-title">
-      <div class="section-head"><h2 id="bal-title">Balance over time</h2></div>
+      <div class="section-head"><h2 id="bal-title">${title}</h2></div>
       <div class="card empty-card"><p class="muted">Add your balance to see where it's heading.</p>
         <button type="button" class="btn btn-quiet btn-sm" data-action="reconcile">Add balance</button></div>
     </section>`;
   }
   if (!series.history.length) {
     return html`<section class="home-section" aria-labelledby="bal-title">
-      <div class="section-head"><h2 id="bal-title">Balance over time</h2></div>
+      <div class="section-head"><h2 id="bal-title">${title}</h2></div>
       <div class="card empty-card"><p class="muted">Your balance tracking starts on ${formatDate(ctx.data.balance.startDate, 'medium')}.</p></div>
     </section>`;
   }
@@ -35,7 +37,7 @@ export function balanceCard(ctx) {
     ? `Balance ${formatMoney(series.history[0].balance)} on ${formatDate(series.history[0].date, 'short')}, ${formatMoney(today.balance)} today, projected ${formatMoney(end.balance)} on ${formatDate(end.date, 'short')}.`
     : `Balance ${formatMoney(series.history[0].balance)} on ${formatDate(series.history[0].date, 'short')} and ${formatMoney(today.balance)} today.`;
   return html`<section class="home-section" aria-labelledby="bal-title">
-    <div class="section-head"><h2 id="bal-title">Balance over time</h2></div>
+    <div class="section-head"><h2 id="bal-title">${title}</h2></div>
     <div class="card chart-card">
       ${enough
         ? html`
@@ -46,7 +48,7 @@ export function balanceCard(ctx) {
           <div class="chart" data-chart="balance" tabindex="0" role="img" aria-label="${summary} Drag across the chart, or use the arrow keys, to see any day."></div>
           <div class="legend" aria-hidden="true">
             <span class="legend-key"><i class="key-line"></i>Balance</span>
-            <span class="legend-key"><i class="key-line dashed"></i>Projected with bills and expected pay</span>
+            <span class="legend-key"><i class="key-line dashed"></i>${withCards ? 'Projected with bills, card payments and pay' : 'Projected with bills and expected pay'}</span>
           </div>
           <details class="chart-table">
             <summary>Show as a table</summary>

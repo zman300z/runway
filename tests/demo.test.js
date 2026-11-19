@@ -5,6 +5,7 @@ import { summarize } from '../js/budget.js';
 import { validate } from '../js/store.js';
 import { postDueCharges } from '../js/recurring.js';
 import { formatMoney } from '../js/money.js';
+import { cardSummary, owedOn, pendingPayments, pendingStatement, needsQuarterReminder, rewardsEstimate } from '../js/cards.js';
 
 const TODAY = '2026-11-19'; // Thursday
 
@@ -42,8 +43,13 @@ test('safe-to-spend on demo data matches a hand calculation', (t) => {
   const leftThisMonth = limit - spent - scheduled;
   const budgetPerDay = Math.floor(leftThisMonth / daysLeft);
 
+  // The bank feels Debit purchases, income and card payments. Card purchases wait for the payment.
   let balance = d.balance.start;
-  for (const tx of d.transactions) if (tx.date >= d.balance.startDate && tx.date <= TODAY) balance += tx.amount;
+  for (const tx of d.transactions) {
+    if (tx.date < d.balance.startDate || tx.date > TODAY) continue;
+    if (tx.type === 'cardPayment') balance -= tx.amount;
+    else if ((tx.account ?? 'bank') === 'bank') balance += tx.amount;
+  }
   // Next payday is Friday, Nov 20. No bills fall between today and then.
   const cashUntilPayday = balance;
   const cashPerDay = Math.floor(cashUntilPayday / 1);
@@ -63,4 +69,29 @@ test('safe-to-spend on demo data matches a hand calculation', (t) => {
   assert.equal(s.cash, cashUntilPayday);
   assert.equal(s.daily, safeToday);
   assert.equal(s.month, Math.min(leftThisMonth, cashUntilPayday));
+});
+
+test('the demo card: purchases on the card, autopay paid each statement, nothing to answer', () => {
+  const d = buildDemoData(TODAY, { now: 1 });
+  const [card] = d.cards;
+  assert.equal(card.name, 'Student Card');
+  assert.ok(d.transactions.filter((t) => t.account === card.id && t.type === 'expense').length > 40, 'card purchases');
+  assert.ok(d.recurring.some((b) => b.account === card.id), 'a bill on the card');
+  assert.ok(d.transactions.filter((t) => t.type === 'cardPayment').length >= 5, 'monthly autopay payments');
+  assert.ok(d.transactions.some((t) => t.type === 'cashback'), 'a cash back credit');
+  assert.deepEqual(pendingPayments(d, card, TODAY), []);
+  assert.equal(pendingStatement(card, TODAY), null);
+  assert.equal(needsQuarterReminder(card, TODAY, card.quarterSeen), false);
+  // Every payment paid its statement in full, so what is owed is the Nov 12 statement plus new charges.
+  const c = cardSummary(d, card, TODAY);
+  assert.equal(c.closing, '2026-11-12');
+  assert.equal(c.due, '2026-12-09');
+  assert.equal(c.statementDue, owedOn(d, card, '2026-11-12'));
+  assert.equal(c.owed, c.statementDue + c.newCharges);
+  assert.ok(c.owed > 0);
+  // Card purchases still count as spending, and the bank still matches what Home shows.
+  const s = summarize(d, TODAY);
+  assert.equal(s.afterPayoff, s.balance - c.owed);
+  assert.equal(s.cardDue, 0); // due Dec 9, after Friday's payday
+  assert.ok(rewardsEstimate(d, card, TODAY).total > 0);
 });

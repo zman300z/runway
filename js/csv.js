@@ -15,18 +15,27 @@ export function csvCell(value, text = false) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Every transaction, oldest first. Starts with a byte-order mark so Excel reads emoji correctly. */
+const cardName = (data, id) => (data.cards ?? []).find((c) => c.id === id)?.name ?? 'Card';
+
+/**
+ * Every transaction, oldest first. Starts with a byte-order mark so Excel reads emoji correctly.
+ * "Paid with" is Debit (the bank) or the card's name. A card payment shows as money out of the
+ * bank, with the card it paid in the Category column.
+ */
 export function transactionsToCSV(data) {
   const cats = categoryMap(data.categories);
   const sorted = [...data.transactions].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
     return (a.createdAt ?? 0) - (b.createdAt ?? 0);
   });
-  const lines = ['Date,Type,Category,Bucket,Amount,Note'];
+  const lines = ['Date,Type,Category,Bucket,Amount,Paid with,Note'];
   for (const tx of sorted) {
     let type = 'Adjustment';
     let category = '';
     let bucket = '';
+    let amount = tx.amount;
+    const account = tx.account ?? 'bank';
+    let paidWith = account === 'bank' ? 'Debit' : cardName(data, account);
     if (tx.type === 'expense') {
       type = tx.amount > 0 ? 'Refund' : 'Expense';
       category = cats.get(tx.categoryId)?.name ?? 'Uncategorized';
@@ -34,13 +43,21 @@ export function transactionsToCSV(data) {
     } else if (tx.type === 'income') {
       type = 'Income';
       category = incomeSource(tx.source).name;
+    } else if (tx.type === 'cardPayment') {
+      type = 'Card payment';
+      category = cardName(data, tx.cardId);
+      amount = -tx.amount;
+      paidWith = 'Debit';
+    } else if (tx.type === 'cashback') {
+      type = 'Cash back';
     }
     lines.push([
       csvCell(tx.date),
       csvCell(type),
       csvCell(category, true),
       csvCell(bucket),
-      csvCell(centsToDecimal(tx.amount)),
+      csvCell(centsToDecimal(amount)),
+      csvCell(paidWith, true),
       csvCell(tx.note, true),
     ].join(','));
   }

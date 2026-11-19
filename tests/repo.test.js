@@ -30,7 +30,7 @@ const APP_FILES = FILES.filter((f) => f === 'index.html' || f === 'sw.js' || f =
   || f.startsWith('js/') || f.startsWith('css/'));
 
 /** Pure logic modules that must run in Node without a browser. */
-const LOGIC = ['money', 'dates', 'ids', 'categories', 'recurring', 'pay', 'budget', 'explain', 'actions', 'csv', 'store', 'demo', 'version', 'charts', 'search']
+const LOGIC = ['money', 'dates', 'ids', 'categories', 'recurring', 'pay', 'budget', 'explain', 'actions', 'csv', 'store', 'demo', 'version', 'charts', 'search', 'cards']
   .map((name) => `js/${name}.js`)
   .filter((f) => existsSync(join(ROOT, f)));
 

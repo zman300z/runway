@@ -3,13 +3,19 @@
 import { formatMoney } from './money.js';
 import { formatDate, periodLabel } from './dates.js';
 import { yearlyCost, billTotals, CADENCE_UNIT } from './recurring.js';
+import { bankEffect, cardSummary, findCard, activeCards, rewardsEstimate, rateText } from './cards.js';
 
 const money = (c) => formatMoney(c);
+/** A rate in basis points as a percent: 150 is "1.5%". */
+export const ratePct = (bp) => `${rateText(bp)}%`;
 const MINUS = '−';
 /** "− $5.00", or "+ $5.00" when the amount is negative. */
 const less = (c) => (c >= 0 ? `${MINUS} ${money(c)}` : `+ ${money(-c)}`);
 const plus = (c) => (c >= 0 ? `+ ${money(c)}` : `${MINUS} ${money(-c)}`);
 const row = (label, value, total = false) => ({ label, value, total });
+
+/** "12%", or "Under 1%" when a little is owed. */
+export const utilizationText = (c) => (c.reported > 0 && c.utilization === 0 ? 'Under 1%' : `${c.utilization}%`);
 
 export const PACE_LABEL = { ontrack: 'On track', ahead: 'Ahead of pace', over: 'Over limit' };
 
@@ -30,9 +36,16 @@ function budgetSection(s, withDaily) {
 function cashSection(s, withDaily) {
   const toPayday = Boolean(s.payday);
   const rows = [
-    row('Balance right now', money(s.balance)),
-    row(toPayday ? 'Bills due before payday' : 'Bills due before the month ends', less(s.billsBeforeHorizon)),
+    row(s.hasCards ? 'Bank balance right now' : 'Balance right now', money(s.balance)),
+    row(
+      `${s.hasCards ? 'Debit bills' : 'Bills'} due before ${toPayday ? 'payday' : 'the month ends'}`,
+      less(s.billsBeforeHorizon),
+    ),
   ];
+  for (const item of s.cardDueItems ?? []) {
+    const when = item.late ? `was due ${formatDate(item.due, 'medium')}, not confirmed yet` : `due ${formatDate(item.due, 'medium')}`;
+    rows.push(row(`${item.name} payment, ${when}`, less(item.amount)));
+  }
   if (s.futureOutflows) rows.push(row('Purchases dated in the future', less(s.futureOutflows)));
   rows.push(row(toPayday ? 'Cash until payday' : 'Cash until the month ends', money(s.cash), true));
   if (withDaily) {
@@ -91,31 +104,176 @@ const EXPLAINERS = {
   },
 
   balance(s, data) {
+    const name = s.hasCards ? 'Bank balance' : 'Balance';
     if (!data.balance) {
-      return { title: 'Balance', intro: 'Add your debit card balance in Settings to track it here.', sections: [] };
+      return { title: name, intro: 'Add your debit card balance in Settings to track it here.', sections: [] };
     }
     let income = 0;
     let spending = 0;
+    let payments = 0;
     let adjustments = 0;
     for (const t of data.transactions) {
       if (t.date < data.balance.startDate || t.date > s.today) continue;
-      if (t.type === 'income') income += t.amount;
-      else if (t.type === 'expense') spending += -t.amount;
-      else adjustments += t.amount;
+      const effect = bankEffect(t);
+      if (t.type === 'cardPayment') payments += t.amount;
+      else if (!effect) continue; // on a card: the bank feels it on payment day
+      else if (t.type === 'income') income += effect;
+      else if (t.type === 'expense') spending += -effect;
+      else adjustments += effect;
     }
     const rows = [
       row(`Starting balance on ${formatDate(data.balance.startDate, 'full')}`, money(data.balance.start)),
       row('Income since then', plus(income)),
-      row('Spending since then (refunds count back)', less(spending)),
+      row(`${s.hasCards ? 'Debit spending' : 'Spending'} since then (refunds count back)`, less(spending)),
     ];
+    if (payments) rows.push(row('Card payments since then', less(payments)));
     if (adjustments) rows.push(row('Adjustments from Reconcile', plus(adjustments)));
-    rows.push(row('Balance now', money(s.balance), true));
+    rows.push(row(`${name} now`, money(s.balance), true));
+    const reconcile = "If this doesn't match your bank app, tap Reconcile. Runway adds an adjustment for the difference.";
     return {
-      title: 'Balance',
+      title: name,
       intro: 'Your starting balance plus everything logged since that day.',
       sections: [{ heading: 'How it adds up', rows }],
-      result: { label: 'Balance now', value: money(s.balance) },
-      footnote: "If this doesn't match your bank app, tap Reconcile. Runway adds an adjustment for the difference.",
+      result: { label: `${name} now`, value: money(s.balance) },
+      footnote: s.hasCards ? `Card purchases don't touch your bank until you pay the card. ${reconcile}` : reconcile,
+    };
+  },
+
+  owed(s, data) {
+    const cards = activeCards(data).map((card) => cardSummary(data, card, s.today));
+    const sections = cards.map((c) => {
+      const rows = [];
+      if (c.closing) {
+        rows.push(row(
+          c.statementDue ? `Statement balance, due ${formatDate(c.due, 'medium')}` : `Statement from ${formatDate(c.closing, 'medium')}, paid`,
+          money(c.statementDue),
+        ));
+        rows.push(row(`New charges since ${formatDate(c.closing, 'medium')}`, plus(c.newCharges)));
+      } else {
+        rows.push(row('Charges so far (no statement yet)', money(c.owed)));
+      }
+      rows.push(c.owed < 0 ? row('Credit on this card', money(c.credit), true) : row('Owed on this card', money(c.owed), true));
+      return { heading: c.card.name, rows };
+    });
+    const credit = s.owed < 0;
+    return {
+      title: credit ? 'Credit on your card' : 'Credit card owed',
+      intro: 'Everything on your card: the statement balance that is due, plus new charges that will be on the next statement.',
+      sections,
+      result: { label: credit ? 'Credit' : 'Total owed', value: money(Math.abs(s.owed)) },
+      footnote: 'A card purchase counts as spending the day you make it. Paying the card only moves money from your bank to the card, so it never counts as spending.',
+    };
+  },
+
+  afterPayoff(s) {
+    if (s.balance === null) {
+      return { title: 'After card is paid off', intro: 'Add your bank balance in Settings to see this.', sections: [] };
+    }
+    return {
+      title: 'After card is paid off',
+      intro: 'What your bank balance would be once everything on your card is paid, including new charges that are not due yet.',
+      sections: [{
+        heading: 'How it adds up',
+        rows: [
+          row('Bank balance now', money(s.balance)),
+          row(s.owed < 0 ? 'Credit on your card' : 'Owed on your card (statement plus new charges)', less(s.owed)),
+          row('After card is paid off', money(s.afterPayoff), true),
+        ],
+      }],
+      result: { label: 'After card is paid off', value: money(s.afterPayoff) },
+      footnote: "Paying the card doesn't change this number, because the money only moves from your bank to the card.",
+    };
+  },
+
+  statement(s, data) {
+    const c = cardFor(s, data);
+    if (!c) return { title: 'Statement balance', intro: 'Add a card in Settings.', sections: [] };
+    if (!c.closing) {
+      return {
+        title: 'Statement balance',
+        intro: `No statement yet. The first one closes on ${formatDate(c.cycleEnd, 'full')}.`,
+        sections: [],
+      };
+    }
+    const confirmed = Number.isSafeInteger(c.card.statements?.[c.closing]);
+    const rows = [
+      row(confirmed
+        ? `Statement on ${formatDate(c.closing, 'medium')}, from your card app`
+        : `Owed when the statement closed on ${formatDate(c.closing, 'medium')}`, money(c.statement)),
+      row('Paid since then', less(c.statement - c.statementDue)),
+      row(`Still due by ${formatDate(c.due, 'medium')}`, money(c.statementDue), true),
+    ];
+    return {
+      title: 'Statement balance',
+      intro: 'What your last statement says you owe. Paying it in full by the due date means no interest.',
+      sections: [{ heading: c.card.name, rows }],
+      result: { label: 'Still due', value: money(c.statementDue) },
+      footnote: c.statementDue > 0
+        ? `Pay ${money(c.statementDue)} by ${formatDate(c.due, 'full')} and you won't be charged interest. Paying less means interest on the rest.`
+        : 'Paid in full. No interest on this statement.',
+    };
+  },
+
+  cardCycle(s, data) {
+    const c = cardFor(s, data);
+    if (!c) return { title: 'Card this cycle', intro: 'Add a card in Settings.', sections: [] };
+    const rows = [row(`Card purchases since ${formatDate(c.cycleStart, 'medium')} (refunds count back)`, money(c.cycleSpend))];
+    if (c.cap) {
+      rows.push(row('Your cap for each cycle', money(c.cap)));
+      rows.push(row('Used', `${Math.floor((Math.max(0, c.cycleSpend) * 100) / c.cap)}%`, true));
+      rows.push(c.overCap
+        ? row('Over your cap by', money(c.overCap), true)
+        : row('Left before your cap', money(c.cap - c.cycleSpend), true));
+    }
+    return {
+      title: 'Card this cycle',
+      intro: `This statement cycle runs ${formatDate(c.cycleStart, 'medium')} to ${formatDate(c.cycleEnd, 'medium')}. Counting per cycle keeps each card bill under your cap.`,
+      sections: [{ heading: c.card.name, rows }],
+      result: c.cap ? { label: 'Card this cycle', value: `${money(c.cycleSpend)} of ${money(c.cap)}` } : null,
+      footnote: c.cap
+        ? 'Your cap is your own limit, separate from the credit limit. Runway nudges you at 80% and again at 100%. Payments and cash back credits never count here.'
+        : 'Set a personal monthly cap for this card in Settings to track it.',
+    };
+  },
+
+  utilization(s, data) {
+    const c = cardFor(s, data);
+    if (!c) return { title: 'Utilization', intro: 'Add a card in Settings.', sections: [] };
+    const owedNow = Math.max(0, c.owed);
+    const rows = [row('Owed on the card now', money(owedNow))];
+    if (owedNow > c.reported) rows.push(row(`Autopay due ${formatDate(c.due, 'medium')}, before the closing`, less(owedNow - c.reported)));
+    rows.push(row(`Likely reported on ${formatDate(c.cycleEnd, 'medium')}`, money(c.reported), true));
+    rows.push(row('Credit limit', money(c.card.limit)));
+    rows.push(row('Utilization', utilizationText(c), true));
+    return {
+      title: 'Utilization',
+      intro: 'Card companies report your balance to the credit bureaus on the statement closing date, so that balance is the one that counts.',
+      sections: [{ heading: c.card.name, rows }],
+      result: { label: 'Utilization', value: utilizationText(c) },
+      footnote: 'Keeping it at 30% of your limit or lower is better for your credit score. Paying part of the card before the closing date lowers it.',
+    };
+  },
+
+  cashback(s, data) {
+    const card = findCard(data, s.cardId);
+    const r = card ? rewardsEstimate(data, card, s.today) : null;
+    if (!r) return { title: 'Cash back (estimate)', intro: 'Turn on the cash back tracker for this card in Settings.', sections: [] };
+    const rows = [];
+    if (r.bonus) {
+      rows.push(row(`Bonus spending this quarter, ${ratePct(r.bonus.rateBp)} back`, `${money(r.bonus.spent)} of ${money(r.bonus.cap)}`));
+      rows.push(row('Estimated this quarter', money(r.windowEarned)));
+    }
+    rows.push(row(`Estimated since ${formatDate(card.openDate, 'medium')}`, money(r.earned)));
+    if (card.rewards.firstYearMatch) {
+      rows.push(row(r.matchActive ? 'First-year match (doubles it)' : `First-year match, ended ${formatDate(r.anniversary, 'full')}`, plus(r.match)));
+    }
+    rows.push(row('Estimated total', money(r.total), true));
+    return {
+      title: 'Cash back (estimate)',
+      intro: `${ratePct(card.rewards.baseBp)} back on everything, plus the bonus rate on the bonus categories you entered, up to each bonus cap.`,
+      sections: [{ heading: card.name, rows }],
+      result: { label: 'Estimated total', value: money(r.total) },
+      footnote: "This is an estimate. Your categories won't match the card company's exactly, so check your card app for the real number.",
     };
   },
 
@@ -260,6 +418,12 @@ const EXPLAINERS = {
     };
   },
 };
+
+/** The card a card "?" is about: `s.cardId`, or the first open card. */
+function cardFor(s, data) {
+  const card = findCard(data, s.cardId) ?? activeCards(data)[0];
+  return card ? cardSummary(data, card, s.today) : null;
+}
 
 /** Explanation for one "?" button. `subject` is usually the Home summary. */
 export function explain(topic, subject, data) {

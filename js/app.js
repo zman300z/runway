@@ -16,7 +16,7 @@ import { editTransaction } from './ui/activity.js';
 import { shareFile } from './ui/files.js';
 import { plural } from './ui/format.js';
 import { limitSheet } from './ui/settings.js';
-import { formatWholeMoney, floorDollars } from './money.js';
+import { formatMoney, formatWholeMoney, floorDollars } from './money.js';
 import { actions as backupActions } from './ui/backup.js';
 import * as home from './ui/home.js';
 import * as activity from './ui/activity.js';
@@ -24,8 +24,9 @@ import * as bills from './ui/bills.js';
 import * as insights from './ui/insights.js';
 import * as settings from './ui/settings.js';
 import * as onboarding from './ui/onboarding.js';
+import * as cardPage from './ui/card.js';
 
-const SCREENS = { home, activity, bills, insights, settings };
+const SCREENS = { home, activity, bills, insights, settings, card: cardPage };
 const TABS = [
   ['home', 'Home', 'home'],
   ['activity', 'Activity', 'list'],
@@ -73,6 +74,9 @@ const ctx = {
   },
   get ui() {
     return state.ui;
+  },
+  get route() {
+    return state.route;
   },
   get summary() {
     if (!state.summary || state.summary.data !== state.data || state.summary.today !== state.today) {
@@ -172,6 +176,17 @@ function scheduleMidnight() {
 // Limit warnings: after a change, announce any newly crossed 80% or 100% line, once per month.
 
 function warningText(w) {
+  if (w.kind === 'card') {
+    if (w.level === 100) {
+      return w.over > 0
+        ? `${w.name} is ${formatMoney(w.over)} over your ${formatWholeMoney(w.limit)} cap this cycle.`
+        : `${w.name} hit your ${formatWholeMoney(w.limit)} cap this cycle.`;
+    }
+    return `Heads up: ${w.name} is at ${Math.floor((w.spent * 100) / w.limit)}% of your ${formatWholeMoney(w.limit)} cap this cycle.`;
+  }
+  if (w.kind === 'utilization') {
+    return `Heads up: ${w.name} is at ${w.pct}% of its credit limit. Under 30% is better for your credit score.`;
+  }
   const name = w.kind === 'month' ? 'your monthly limit' : `${w.name}`;
   if (w.level === 100) {
     return w.kind === 'month'
@@ -317,7 +332,7 @@ function registerServiceWorker() {
 // Rendering
 
 function tabbar(active) {
-  const current = active === 'settings' ? 'home' : active;
+  const current = active === 'settings' || active === 'card' ? 'home' : active;
   return html`<nav class="tabbar" aria-label="Main">
     ${TABS.map((t) => (t
       ? html`<button type="button" class="tab${current === t[0] ? ' on' : ''}" data-action="tab" data-to="${t[0]}" ${current === t[0] ? html`aria-current="page"` : ''}>${icon(t[2])}<span>${t[1]}</span></button>`
@@ -396,7 +411,7 @@ const GLOBAL_ACTIONS = {
   nav: (el) => navigate(el.dataset.to),
   back: () => back(),
   'quick-add': () => openQuickAdd(ctx),
-  explain: (el) => openExplain(ctx, el.dataset.topic),
+  explain: (el) => openExplain(ctx, el.dataset.topic, el.dataset.card ? { ...ctx.summary, cardId: el.dataset.card } : null),
   reconcile: () => openReconcile(ctx),
   'edit-tx': (el) => editTransaction(ctx, el.dataset.id),
   'edit-limit': () => limitSheet(ctx),

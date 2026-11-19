@@ -8,6 +8,7 @@ export const BUCKET_LABEL = { need: 'Need', want: 'Want', savings: 'Savings' };
 export const CATEGORY_COLORS = [
   '#7C5CFA', '#2F9E44', '#1C7ED6', '#E8A400', '#0C9DB8', '#4263EB', '#F76707',
   '#9A4F14', '#D6336C', '#AE3EC9', '#5C7CFA', '#E03131', '#0CA678', '#868E96',
+  '#5C940D',
 ];
 
 // [id, name, emoji, bucket, color]
@@ -26,7 +27,11 @@ const DEFAULTS = [
   ['gifts', 'Gifts', '🎁', 'want', '#E03131'],
   ['savings', 'Savings', '🐷', 'savings', '#0CA678'],
   ['other', 'Other', '📦', 'want', '#868E96'],
+  ['fees', 'Fees & interest', '💸', 'want', '#5C940D'],
 ];
+
+/** The category Card Reconcile uses for interest and fees. */
+export const FEES_CATEGORY = { id: 'fees', name: 'Fees & interest', emoji: '💸', color: '#5C940D', bucket: 'want', limit: null };
 
 export function defaultCategories() {
   return DEFAULTS.map(([id, name, emoji, bucket, color]) => ({ id, name, emoji, color, bucket, limit: null }));
@@ -42,6 +47,7 @@ export const EMOJI_CHOICES = [
 export const INCOME_SOURCES = [
   { id: 'paycheck', name: 'Paycheck', emoji: '💼' },
   { id: 'family', name: 'From family', emoji: '🏡' },
+  { id: 'rewards', name: 'Rewards', emoji: '🪙' },
   { id: 'other', name: 'Other income', emoji: '💵' },
 ];
 export const INCOME_SOURCE_IDS = INCOME_SOURCES.map((s) => s.id);

@@ -22,7 +22,7 @@ export function openExplain(ctx, topic, subject = null) {
   });
 }
 
-/** A small "?" button that opens an explanation. */
-export function helpButton(topic, label) {
-  return html`<button type="button" class="help" data-action="explain" data-topic="${topic}" aria-label="${label}">?</button>`;
+/** A small "?" button that opens an explanation. Card topics name the card. */
+export function helpButton(topic, label, cardId = null) {
+  return html`<button type="button" class="help" data-action="explain" data-topic="${topic}"${cardId ? html` data-card="${cardId}"` : ''} aria-label="${label}">?</button>`;
 }

@@ -1424,13 +1424,14 @@ svg.i {
 
 .qa-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 10px 0 8px;
 }
 
 .qa-row .segmented {
-  flex: 1;
+  flex: 1 1 6.5rem;
 }
 
 .qa-row .pill {
@@ -3186,4 +3187,471 @@ body:has(.sheet-layer.open) .toast-region {
 
 .toast-tappable {
   cursor: pointer;
+}
+
+/* Credit cards */
+
+.note-bad {
+  background: var(--bad-soft);
+}
+
+.note-bad > svg.i {
+  color: var(--bad);
+}
+
+/* Home: with a card, the month tile and the money tile stack at full width. */
+
+.tiles.stacked {
+  grid-template-columns: 1fr;
+}
+
+.tiles.stacked .month-tile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "ring top"
+    "ring value"
+    "ring pill";
+  align-items: center;
+  column-gap: 18px;
+  row-gap: 6px;
+}
+
+.tiles.stacked .month-tile .tile-top {
+  grid-area: top;
+}
+
+.tiles.stacked .month-tile .ring-wrap {
+  grid-area: ring;
+}
+
+.tiles.stacked .month-tile .tile-value {
+  grid-area: value;
+}
+
+.tiles.stacked .month-tile .pace-pill {
+  grid-area: pill;
+  justify-self: start;
+}
+
+.money-tile {
+  gap: 0;
+  padding: 4px 16px 14px;
+}
+
+.money-row {
+  width: 100%;
+  padding: 12px 0;
+}
+
+.money-row + .money-row {
+  border-top: 1px solid var(--separator);
+}
+
+.money-tile .tile-top {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.money-big {
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.money-row .pill {
+  margin-top: 6px;
+}
+
+.money-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+}
+
+.money-mid,
+.money-after {
+  margin-left: auto;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.money-mid {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.money-after {
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.money-row .tile-sub {
+  margin-top: 2px;
+}
+
+.money-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.money-actions .btn {
+  flex: 1 1 0;
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+/* The slim "Card this cycle" bar */
+
+.cycle-mini {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.cycle-mini {
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.cycle-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 0.86rem;
+  color: var(--text-2);
+}
+
+.cycle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cycle-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.cycle-value strong {
+  font-weight: 700;
+}
+
+.cycle-value.tone-bad,
+.cycle-value.tone-bad strong {
+  color: var(--bad);
+}
+
+.cycle-value svg.i {
+  width: 15px;
+  height: 15px;
+}
+
+.bar.bar-slim {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.bar.bar-slim > span {
+  border-radius: 3px;
+}
+
+/* Quick Add: the Debit / Card chip and the cap heads-up */
+
+.pay-chip {
+  flex: none;
+  max-width: 9.5rem;
+  padding: 0 12px;
+}
+
+.pay-chip .chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qa-cap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--warn-soft);
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.qa-cap[hidden] {
+  display: none;
+}
+
+.qa-cap svg.i {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  color: var(--warn);
+}
+
+/* Card banners on Home */
+
+.card-due {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--card));
+}
+
+.banner-card {
+  flex-wrap: wrap;
+  row-gap: 0;
+  align-items: flex-start;
+  padding: 10px 12px 2px 14px;
+  line-height: 1.35;
+}
+
+.banner-card > svg.i {
+  margin-top: 1px;
+}
+
+.banner-card > span {
+  min-width: 0;
+}
+
+.banner-card .banner-actions {
+  display: flex;
+  flex: 1 1 100%;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+/* Card sheets */
+
+.quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.quick-amounts .chip {
+  font-size: 0.84rem;
+}
+
+.ks-live {
+  margin-bottom: 10px;
+}
+
+.ks-live .note {
+  margin-top: 10px;
+}
+
+.ks-live > .muted {
+  text-align: center;
+}
+
+.ks-row {
+  justify-content: center;
+  margin: 4px 0 10px;
+}
+
+.ks-hint {
+  text-align: center;
+  margin: 8px 0 0;
+}
+
+.recon-ask {
+  margin: 14px 4px 8px;
+  font-weight: 650;
+}
+
+.reason-list {
+  display: grid;
+  gap: 8px;
+}
+
+.reason {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "title chev"
+    "text chev";
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.reason:active {
+  background: var(--fill-2);
+}
+
+.reason-title {
+  grid-area: title;
+  font-weight: 650;
+}
+
+.reason-text {
+  grid-area: text;
+  font-size: 0.84rem;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+
+.reason svg.i {
+  grid-area: chev;
+  width: 18px;
+  height: 18px;
+  color: var(--text-3);
+}
+
+/* Card form */
+
+.form-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.form-pair .form-field {
+  min-width: 0;
+}
+
+.form-hint {
+  margin: -6px 4px 14px;
+}
+
+.money-suffix {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.toggle-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--fill);
+}
+
+.toggle-line label {
+  flex: 1;
+  cursor: pointer;
+}
+
+.toggle-title {
+  display: block;
+  font-weight: 600;
+}
+
+.toggle-line .field-hint {
+  display: block;
+  margin: 2px 0 0;
+}
+
+.bonus-list {
+  margin-bottom: 8px;
+  background: var(--fill);
+  box-shadow: none;
+}
+
+.rewards-part:empty {
+  display: none;
+}
+
+/* Card page */
+
+.owed-card .tile-top {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.owed-big {
+  margin: 2px 0 6px;
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.owed-card .money-row {
+  padding: 10px 0;
+  border-top: 1px solid var(--separator);
+}
+
+.owed-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.owed-actions .btn {
+  flex: 1 1 0;
+  margin-top: 0;
+  min-height: 44px;
+}
+
+.cycle-card .cycle-mini {
+  margin-top: 0;
+}
+
+.util-line {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
+}
+
+.cycle-card .small,
+.cashback-card .small {
+  margin-top: 6px;
+}
+
+.cb-total {
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+
+.cb-total strong {
+  margin-right: 4px;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 750;
+}
+
+.card-links {
+  margin-top: 28px;
 }

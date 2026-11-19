@@ -15,7 +15,7 @@ test('add, edit, delete and undo a transaction', () => {
   const start = novemberExample();
   const { data: added, tx } = addTransaction(start, { type: 'expense', amount: -450, categoryId: 'coffee', date: TODAY, note: '  Oat   latte ' }, { id: 'new', now: 10 });
   assert.equal(added.transactions.length, 8);
-  assert.deepEqual(tx, { id: 'new', type: 'expense', amount: -450, categoryId: 'coffee', bucket: null, source: null, note: 'Oat latte', date: TODAY, createdAt: 10, updatedAt: 10 });
+  assert.deepEqual(tx, { id: 'new', type: 'expense', amount: -450, account: 'bank', categoryId: 'coffee', bucket: null, source: null, note: 'Oat latte', date: TODAY, createdAt: 10, updatedAt: 10 });
   assert.equal(start.transactions.length, 7, 'the input is never changed');
 
   const { data: edited, tx: changed } = updateTransaction(added, 'new', { amount: -525, bucket: 'need' }, { now: 20 });
@@ -122,7 +122,7 @@ test('categories: add, rename, reorder, and delete with a move', () => {
 
   const d3 = moveCategory(d2, 'gym', 0);
   assert.equal(d3.categories[0].id, 'gym');
-  assert.equal(d3.categories.length, 15);
+  assert.equal(d3.categories.length, 16);
 
   const withCoffee = novemberExample();
   assert.throws(() => deleteCategory(withCoffee, 'coffee'), /Pick a category to move/);
@@ -133,7 +133,7 @@ test('categories: add, rename, reorder, and delete with a move', () => {
   const movedBills = deleteCategory(bills, 'phone', 'bills');
   assert.equal(movedBills.recurring.find((r) => r.id === 'phone').categoryId, 'bills');
   const unused = deleteCategory(novemberExample(), 'gifts');
-  assert.equal(unused.categories.length, 13);
+  assert.equal(unused.categories.length, 14);
 });
 
 test('budget settings and the savings goal', () => {

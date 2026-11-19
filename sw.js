@@ -3,7 +3,7 @@
 // background and waits; the app shows "Update available, tap to refresh" and you choose when.
 // Your data is in localStorage, which updates never touch.
 
-const VERSION = '1.0.1';
+const VERSION = '1.1.0';
 const CACHE = `runway-${VERSION}`;
 
 // Every file the app needs. tests/repo.test.js fails if one is missing.
@@ -15,6 +15,7 @@ const ASSETS = [
   './js/actions.js',
   './js/app.js',
   './js/budget.js',
+  './js/cards.js',
   './js/categories.js',
   './js/charts.js',
   './js/csv.js',
@@ -33,6 +34,8 @@ const ASSETS = [
   './js/ui/balance-chart.js',
   './js/ui/bills.js',
   './js/ui/brand.js',
+  './js/ui/card-sheets.js',
+  './js/ui/card.js',
   './js/ui/categories-page.js',
   './js/ui/dom.js',
   './js/ui/explain-sheet.js',

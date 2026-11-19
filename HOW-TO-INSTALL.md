@@ -25,6 +25,15 @@ Why the icon matters: iPhone keeps the home screen app's data separate from Safa
 
 Tip: the little **?** next to any number shows exactly how it's calculated, with your real numbers.
 
+## Using a credit card
+
+1. **Add the card.** Settings (the gear on Home), Credit cards, Add a credit card. Your card app shows the statement closing day and the payment due day. Add your credit limit, your own monthly cap, and turn on Autopay if it's set up.
+2. **Log a card purchase.** In Quick Add, tap the **Debit** button once so it shows your card, then log as usual. Debit stays the default every time.
+3. **Read Home.** *Bank balance* is what's really in your account. *Credit card owed* is everything on the card. *After card is paid off* is your bank balance once the card is paid. Card purchases count as spending the day you make them, and paying the card never counts as spending.
+4. **When Runway asks, answer.** On the closing day it asks you to confirm the statement balance from your card app, and on the due day it asks how much left your bank. If the card app ever shows a different balance, open the card (Card details on Home) and tap **Reconcile**.
+
+The cash back numbers are always estimates, because your categories won't match the card company's exactly.
+
 ## How to update the app later
 
 1. Tell Claude Code what you want changed, in plain words.

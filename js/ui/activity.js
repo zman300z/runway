@@ -3,6 +3,7 @@ import { html, setHTML } from './dom.js';
 import { icon } from './icons.js';
 import { openSheet } from './sheet.js';
 import { openQuickAdd } from './quickadd.js';
+import { editCardTransaction } from './card-sheets.js';
 import { txView, plural } from './format.js';
 import { formatMoney } from '../money.js';
 import { relativeDay, periodFor, periodLabel } from '../dates.js';
@@ -12,13 +13,17 @@ import { deleteTransaction, restoreTransaction } from '../actions.js';
 
 const PAGE = 150;
 const KIND_LABEL = { expense: 'Expenses', refund: 'Refunds', income: 'Income', adjustment: 'Adjustments' };
+const CARD_KIND_LABEL = { cardPayment: 'Card payments', cashback: 'Cash back credits' };
+
+/** Card id to card, so rows can name the card a purchase went on. */
+export const cardMap = (data) => new Map((data.cards ?? []).map((c) => [c.id, c]));
 const BUCKET_FILTER_LABEL = { need: 'Needs', want: 'Wants', savings: 'Savings' };
 
 let shown = PAGE;
 
 /** One transaction row. With `swipe`, it can be swiped left to delete. */
-export function txRow(tx, cats, { swipe = true } = {}) {
-  const v = txView(tx, cats);
+export function txRow(tx, cats, { swipe = true, cards = null, showCard = true } = {}) {
+  const v = txView(tx, cats, cards, { showCard });
   return html`<li class="tx-row" data-id="${tx.id}">
     ${swipe ? html`<button type="button" class="tx-delete" data-action="delete-tx" data-id="${tx.id}" tabindex="-1">${icon('trash')}<span>Delete</span></button>` : ''}
     <button type="button" class="tx-main" data-action="edit-tx" data-id="${tx.id}">
@@ -55,7 +60,7 @@ export function render(ctx) {
     <div class="filter-row" role="group" aria-label="Filters">
       ${f.period ? html`<button type="button" class="chip filter-chip on" data-action="clear-period" aria-label="Remove month filter">${periodLabel(periodFor(f.period.start, f.period.startDay))}${icon('close')}</button>` : ''}
       ${chip(cat ? `${cat.emoji} ${cat.name}` : 'Category', 'filter-category', Boolean(cat))}
-      ${chip(f.kind ? KIND_LABEL[f.kind] : 'Type', 'filter-kind', Boolean(f.kind))}
+      ${chip(f.kind ? { ...KIND_LABEL, ...CARD_KIND_LABEL }[f.kind] : 'Type', 'filter-kind', Boolean(f.kind))}
       ${chip(f.bucket ? BUCKET_FILTER_LABEL[f.bucket] : 'Need or want', 'filter-bucket', Boolean(f.bucket))}
       ${anyFilter ? html`<button type="button" class="link-btn sm" data-action="clear-filters">Clear</button>` : ''}
     </div>
@@ -66,6 +71,7 @@ export function render(ctx) {
 function list(ctx) {
   const f = filters(ctx);
   const cats = categoryMap(ctx.data.categories);
+  const cards = cardMap(ctx.data);
   if (!ctx.data.transactions.length) {
     return html`<div class="empty">
       <div class="empty-icon">${icon('list')}</div>
@@ -97,7 +103,7 @@ function list(ctx) {
           ${!g.spent && !g.back && g.saved ? html`<span>${formatMoney(g.saved)} saved</span>` : ''}
         </span>
       </h2>
-      <ul class="card list-card tx-rows">${g.items.map((t) => txRow(t, cats))}</ul>
+      <ul class="card list-card tx-rows">${g.items.map((t) => txRow(t, cats, { cards }))}</ul>
     </section>`)}
     ${all.length > shown ? html`<button type="button" class="btn btn-quiet btn-block more" data-action="show-more">Show more</button>` : ''}`;
 }
@@ -134,7 +140,7 @@ export function deleteWithUndo(ctx, id) {
     return result.data;
   });
   if (!removed) return;
-  const title = txView(removed.tx, categoryMap(ctx.data.categories)).title;
+  const title = txView(removed.tx, categoryMap(ctx.data.categories), cardMap(ctx.data)).title;
   ctx.toast(`Deleted ${title}`, {
     action: { label: 'Undo', run: () => ctx.update((d) => restoreTransaction(d, removed)) },
     duration: 5000,
@@ -143,7 +149,9 @@ export function deleteWithUndo(ctx, id) {
 
 export function editTransaction(ctx, id) {
   const tx = ctx.data.transactions.find((t) => t.id === id);
-  if (tx) openQuickAdd(ctx, { tx });
+  if (!tx) return;
+  if (tx.type === 'cardPayment' || tx.type === 'cashback') editCardTransaction(ctx, tx);
+  else openQuickAdd(ctx, { tx });
 }
 
 export const actions = {
@@ -157,7 +165,8 @@ export const actions = {
     });
   },
   'filter-kind'(ctx) {
-    pickFrom(ctx, 'Type', [{ value: null, label: 'All types' }, ...Object.entries(KIND_LABEL).map(([value, label]) => ({ value, label }))], filters(ctx).kind, (v) => {
+    const kinds = (ctx.data.cards ?? []).length ? { ...KIND_LABEL, ...CARD_KIND_LABEL } : KIND_LABEL;
+    pickFrom(ctx, 'Type', [{ value: null, label: 'All types' }, ...Object.entries(kinds).map(([value, label]) => ({ value, label }))], filters(ctx).kind, (v) => {
       setFilters(ctx, { kind: v });
       ctx.rerender();
     });

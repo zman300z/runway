@@ -121,7 +121,7 @@ test('a deleted posted charge never comes back', () => {
 
 test('new bills start on their first charge date; past dates are counted for a heads-up', () => {
   const b = newBill({ name: ' Netflix ', amount: 1549, categoryId: 'subscriptions', cadence: 'monthly', next: '2026-11-09' }, { id: 'n', now: 5 });
-  assert.deepEqual(b, { id: 'n', name: 'Netflix', amount: 1549, categoryId: 'subscriptions', cadence: 'monthly', anchor: '2026-11-09', next: '2026-11-09', active: true, createdAt: 5 });
+  assert.deepEqual(b, { id: 'n', name: 'Netflix', amount: 1549, categoryId: 'subscriptions', account: 'bank', cadence: 'monthly', anchor: '2026-11-09', next: '2026-11-09', active: true, createdAt: 5 });
   assert.equal(pastChargeCount('monthly', '2026-11-09', '2026-11-18'), 1);
   assert.equal(pastChargeCount('monthly', '2026-09-09', '2026-11-18'), 3);
   assert.equal(pastChargeCount('monthly', '2026-11-25', '2026-11-18'), 0);

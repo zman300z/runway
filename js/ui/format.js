@@ -32,8 +32,26 @@ export function plural(n, one, many = `${one}s`) {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** How one transaction reads in a list. */
-export function txView(tx, cats) {
+/**
+ * How one transaction reads in a list. `cards` is a Map of card id to card, for card names
+ * (with a single card, it is just "Card"). `showCard: false` leaves the card out.
+ */
+export function txView(tx, cats, cards = null, { showCard = true } = {}) {
+  const cardName = (id) => cards?.get(id)?.name ?? 'Card';
+  const cardLabel = (id) => ((cards?.size ?? 0) > 1 ? cardName(id) : 'Card');
+  if (tx.type === 'cardPayment') {
+    return {
+      emoji: '💳', color: '#4263EB', title: tx.note || `${cardName(tx.cardId)} payment`, sub: 'From Debit · not spending',
+      amount: formatMoney(tx.amount), tone: '', kind: 'cardPayment',
+    };
+  }
+  if (tx.type === 'cashback') {
+    return {
+      emoji: '🪙', color: '#0CA678', title: tx.note || 'Cash back credit', sub: showCard ? `Statement credit · ${cardLabel(tx.account)}` : 'Statement credit',
+      amount: formatMoney(tx.amount, { sign: true }), tone: 'good', kind: 'cashback',
+    };
+  }
+  const onCard = showCard && tx.account && tx.account !== 'bank' ? `💳 ${cardLabel(tx.account)}` : null;
   if (tx.type === 'income') {
     const src = incomeSource(tx.source);
     return {
@@ -43,7 +61,7 @@ export function txView(tx, cats) {
   }
   if (tx.type === 'adjustment') {
     return {
-      emoji: '⚖️', color: '#868E96', title: tx.note || 'Adjustment', sub: 'Adjustment',
+      emoji: '⚖️', color: '#868E96', title: tx.note || 'Adjustment', sub: onCard ? `Adjustment · ${onCard}` : 'Adjustment',
       amount: formatMoney(tx.amount, { sign: true }), tone: tx.amount > 0 ? 'good' : '', kind: 'adjustment',
     };
   }
@@ -55,6 +73,7 @@ export function txView(tx, cats) {
   if (tx.note) parts.push(name);
   if (tx.recurringId) parts.push('Bill');
   parts.push(BUCKET_LABEL[effectiveBucket(tx, cats)]);
+  if (onCard) parts.push(onCard);
   return {
     emoji: cat?.emoji ?? '📦',
     color: safeColor(cat?.color),

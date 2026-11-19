@@ -1,7 +1,7 @@
 // Searching, filtering and grouping transactions for the Activity list. Pure functions.
 import { categoryMap, effectiveBucket, incomeSource } from './categories.js';
 
-/** "expense" | "refund" | "income" | "adjustment" */
+/** "expense" | "refund" | "income" | "adjustment" | "cardPayment" | "cashback" */
 export function kindOf(tx) {
   if (tx.type === 'expense') return tx.amount > 0 ? 'refund' : 'expense';
   return tx.type;
@@ -18,6 +18,7 @@ export function byNewest(a, b) {
  */
 export function filterTransactions(data, { q = '', categoryId = null, kind = null, bucket = null, from = null, to = null } = {}) {
   const cats = categoryMap(data.categories);
+  const cardNames = new Map((data.cards ?? []).map((c) => [c.id, c.name]));
   const needle = q.trim().toLowerCase();
   return data.transactions
     .filter((t) => {
@@ -27,7 +28,13 @@ export function filterTransactions(data, { q = '', categoryId = null, kind = nul
       if (kind && kindOf(t) !== kind) return false;
       if (bucket && (t.type !== 'expense' || effectiveBucket(t, cats) !== bucket)) return false;
       if (needle) {
-        const hay = [t.note, cats.get(t.categoryId)?.name, t.type === 'income' ? incomeSource(t.source).name : '']
+        const hay = [
+          t.note,
+          cats.get(t.categoryId)?.name,
+          t.type === 'income' ? incomeSource(t.source).name : '',
+          t.type === 'cardPayment' ? `${cardNames.get(t.cardId) ?? ''} card payment` : '',
+          t.type === 'cashback' ? `${cardNames.get(t.account) ?? ''} cash back` : '',
+        ]
           .join(' ')
           .toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -37,7 +44,10 @@ export function filterTransactions(data, { q = '', categoryId = null, kind = nul
     .sort(byNewest);
 }
 
-/** Group a newest-first list by day. Totals: spent (purchases), back (refunds and income), saved. */
+/**
+ * Group a newest-first list by day. Totals: spent (purchases), back (refunds and income), saved.
+ * Card payments and cash back credits are neither spending nor income, so they never count here.
+ */
 export function groupByDay(transactions, categories) {
   const cats = categoryMap(categories);
   const groups = [];
