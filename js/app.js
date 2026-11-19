@@ -15,6 +15,8 @@ import { openReconcile } from './ui/reconcile.js';
 import { editTransaction } from './ui/activity.js';
 import { shareFile } from './ui/files.js';
 import { plural } from './ui/format.js';
+import { limitSheet } from './ui/settings.js';
+import { formatWholeMoney } from './money.js';
 import * as home from './ui/home.js';
 import * as activity from './ui/activity.js';
 import * as bills from './ui/bills.js';
@@ -97,7 +99,7 @@ const ctx = {
   finishSetup,
   startDemo,
   clearDemo,
-  afterChange: () => {},
+  afterChange,
 };
 
 function save() {
@@ -155,6 +157,37 @@ function scheduleMidnight() {
     refreshDay();
     scheduleMidnight();
   }, next - now);
+}
+
+// Limit warnings: after a change, announce any newly crossed 80% or 100% line, once per month.
+
+function warningText(w) {
+  const name = w.kind === 'month' ? 'your monthly limit' : `${w.name}`;
+  if (w.level === 100) {
+    return w.kind === 'month'
+      ? `You've hit your ${formatWholeMoney(w.limit)} monthly limit.`
+      : `${w.emoji} ${w.name} is at its ${formatWholeMoney(w.limit)} limit.`;
+  }
+  const pct = Math.floor((w.spent * 100) / w.limit);
+  return w.kind === 'month'
+    ? `Heads up: you've used ${pct}% of ${name}.`
+    : `Heads up: ${w.emoji} ${w.name} is at ${pct}% of its ${formatWholeMoney(w.limit)} limit.`;
+}
+
+function afterChange(before) {
+  const after = ctx.summary;
+  const prev = new Map((before?.warnings ?? []).map((w) => [w.key, w.level]));
+  const period = after.period.start;
+  const warned = Object.fromEntries(Object.entries(state.ui.warned ?? {}).filter(([k]) => k.startsWith(period)));
+  for (const w of after.warnings) {
+    if ((prev.get(w.key) ?? 0) >= w.level) continue;
+    const id = `${period}:${w.key}:${w.level}`;
+    if (warned[id]) continue;
+    warned[id] = true;
+    toast(warningText(w), { tone: w.level === 100 ? 'bad' : '', duration: 6000, queue: true });
+    break;
+  }
+  ctx.setUI({ warned });
 }
 
 // Setup and demo data
@@ -268,7 +301,7 @@ const GLOBAL_ACTIONS = {
   explain: (el) => openExplain(ctx, el.dataset.topic),
   reconcile: () => openReconcile(ctx),
   'edit-tx': (el) => editTransaction(ctx, el.dataset.id),
-  'edit-limit': () => navigate('settings'),
+  'edit-limit': () => limitSheet(ctx),
   'clear-demo': () => clearDemo(),
   'export-raw': async () => {
     const raw = state.fatal?.raw ?? '';
@@ -332,6 +365,8 @@ function onVisibility() {
 
 function boot() {
   if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+  // Safari 17.4+ draws <input switch> as a native iOS switch; elsewhere CSS draws one.
+  if (!('switch' in HTMLInputElement.prototype)) document.documentElement.classList.add('no-native-switch');
   document.addEventListener('click', onClick);
   document.addEventListener('input', onInput);
   document.addEventListener('change', onInput);

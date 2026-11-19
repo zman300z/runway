@@ -70,7 +70,8 @@ export function openQuickAdd(ctx, { tx = null, preset = {}, onSaved = null } = {
     if (s.type === 'adjustment') return s.negative ? 'Lowers your balance' : 'Raises your balance';
     const cat = cats().get(s.categoryId);
     if (!cat) return 'Pick a category';
-    const bucket = cat.bucket === 'savings' ? 'Savings' : BUCKET_LABEL[s.bucket ?? cat.bucket];
+    if (cat.bucket === 'savings') return s.type === 'refund' ? `Back out of ${cat.emoji} ${cat.name}` : `${cat.emoji} ${cat.name} · counts toward your goal`;
+    const bucket = BUCKET_LABEL[s.bucket ?? cat.bucket];
     return s.type === 'refund' ? `Refund to ${cat.emoji} ${cat.name}` : `${cat.emoji} ${cat.name} · ${bucket}`;
   }
 

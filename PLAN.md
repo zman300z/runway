@@ -153,3 +153,9 @@ Budget month = calendar month, or "starts on day X" (1 to 28). Days left include
 - **2026-11-19** Invisible or banned characters (the CSV byte-order mark, dashes in the rules test) are built with `String.fromCharCode`, so they can never hide in source files.
 - **2026-11-19** Demo paychecks land every other Friday; the demo starts 182 days back so the 6-month chart is full.
 - **2026-11-19** The local dev server serves the repo at `/runway/`, exactly like GitHub Pages, so a wrong absolute path breaks locally first.
+- **2026-11-19** Quick Add was compacted and its Save button pinned, so it fits a real iPhone with the notch and home bar (screenshots simulate both).
+- **2026-11-19** Saving or resuming a bill posts any charges due on or before today right away, and says so in a toast.
+- **2026-11-19** Paydays before the pay schedule's first date never ask "Did you get paid?". Several missed paydays are asked one at a time, oldest first. "Not paid" just stops asking for that date.
+- **2026-11-19** Limit warnings show as a Home card whenever a limit is at 80% or more, and as a one-time toast per limit, level and month when a change crosses the line. The toast waits for any Undo toast to finish.
+- **2026-11-19** Deleting a category or bill offers Undo for 5 seconds, but only if nothing else changed in between.
+- **2026-11-19** While a sheet is open, toasts appear at the top of the screen so they never cover the sheet's buttons.

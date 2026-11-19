@@ -3,13 +3,17 @@
 import { html, raw } from './dom.js';
 import { icon } from './icons.js';
 import { helpButton } from './explain-sheet.js';
-import { bigMoney, lengthClass } from './format.js';
+import { bigMoney, lengthClass, safeColor, plural } from './format.js';
 import { txRow } from './activity.js';
+import { openQuickAdd } from './quickadd.js';
 import { ringSVG } from '../charts.js';
 import { formatMoney, formatWholeMoney } from '../money.js';
-import { formatDate, diffDays } from '../dates.js';
+import { formatDate, diffDays, addDays } from '../dates.js';
 import { categoryMap } from '../categories.js';
 import { byNewest } from '../search.js';
+import { upcomingCharges } from '../recurring.js';
+import { pendingPaydays } from '../pay.js';
+import { confirmPayday, markPaydayHandled } from '../actions.js';
 import { PACE_LABEL } from '../explain.js';
 
 export const PACE_TONE = { ontrack: 'good', ahead: 'warn', over: 'bad' };
@@ -24,6 +28,27 @@ function demoBanner() {
     ${icon('sparkle')}<span>Exploring demo data</span>
     <button type="button" class="link-btn sm" data-action="clear-demo">Clear demo data</button>
   </div>`;
+}
+
+function paydayBanner(ctx) {
+  const pending = pendingPaydays(ctx.data.pay, ctx.today);
+  if (!pending.length) return '';
+  const date = pending[0];
+  const when = date === ctx.today ? 'Payday!' : `Payday, ${formatDate(date, 'medium')}.`;
+  return html`<section class="card payday" aria-labelledby="payday-title">
+    <div class="payday-top">
+      <span class="payday-emoji" aria-hidden="true">💼</span>
+      <div>
+        <h2 id="payday-title">${when} Did you get paid?</h2>
+        ${pending.length > 1 ? html`<p class="muted small">${plural(pending.length, 'payday')} to check, oldest first.</p>` : ''}
+      </div>
+    </div>
+    <div class="payday-actions">
+      <button type="button" class="btn btn-primary btn-sm" data-action="payday-yes" data-date="${date}">Yes, add ${formatMoney(ctx.data.pay.amount)}</button>
+      <button type="button" class="btn btn-quiet btn-sm" data-action="payday-other" data-date="${date}">Other amount</button>
+      <button type="button" class="btn btn-plain btn-sm" data-action="payday-no" data-date="${date}">Not paid</button>
+    </div>
+  </section>`;
 }
 
 function setupCard() {
@@ -107,6 +132,69 @@ function balanceTile(ctx, s) {
   </div>`;
 }
 
+function warningsSection(s) {
+  if (!s.warnings.length) return '';
+  return html`<section class="home-section" aria-labelledby="warn-title">
+    <div class="section-head"><h2 id="warn-title">Heads up</h2></div>
+    <ul class="card list-card warn-list">
+      ${s.warnings.map((w) => {
+        const pct = Math.min(100, Math.floor((Math.max(0, w.spent) * 100) / w.limit));
+        const over = w.level === 100;
+        const title = w.kind === 'month' ? 'Monthly limit' : `${w.emoji} ${w.name}`;
+        const status = over ? (w.over > 0 ? `Over by ${formatMoney(w.over)}` : 'Limit reached') : `${pct}% used`;
+        return html`<li class="warn-row">
+          <span class="warn-icon ${over ? 'bg-bad' : 'bg-warn'}">${icon('alert')}</span>
+          <div class="warn-text">
+            <p class="warn-title"><span>${title}</span><span class="${over ? 'tone-bad' : 'tone-warn'} strong">${status}</span></p>
+            <div class="bar" aria-hidden="true"><span class="${over ? 'fill-bad' : 'fill-warn'}" style="width:${pct}%"></span></div>
+            <p class="warn-sub">${formatWholeMoney(w.spent)} of ${formatWholeMoney(w.limit)}</p>
+          </div>
+        </li>`;
+      })}
+    </ul>
+  </section>`;
+}
+
+function upcomingSection(ctx) {
+  const soon = upcomingCharges(ctx.data.recurring, addDays(ctx.today, 1), addDays(ctx.today, 7));
+  if (!soon.length) return '';
+  const cats = categoryMap(ctx.data.categories);
+  return html`<section class="home-section" aria-labelledby="soon-title">
+    <div class="section-head">
+      <h2 id="soon-title">Coming up</h2>
+      <button type="button" class="link-btn" data-action="tab" data-to="bills">All bills</button>
+    </div>
+    <ul class="card list-card">${soon.slice(0, 3).map((c) => html`<li><button type="button" class="row" data-action="tab" data-to="bills">
+      <span class="tx-icon" style="--cat:${safeColor(cats.get(c.categoryId)?.color)}" aria-hidden="true">${cats.get(c.categoryId)?.emoji ?? '🔁'}</span>
+      <span class="row-label">${c.name}<span class="row-sub">${diffDays(ctx.today, c.date) === 1 ? 'Tomorrow' : formatDate(c.date, 'medium')}</span></span>
+      <span class="row-value strong">${formatMoney(c.amount)}</span>
+    </button></li>`)}</ul>
+  </section>`;
+}
+
+function savingsSection(ctx, s) {
+  const g = s.goal;
+  const savingsCat = ctx.data.categories.find((c) => c.bucket === 'savings');
+  const nudge = s.leftover > 0 && savingsCat;
+  if (!g && !nudge) return '';
+  return html`<section class="home-section" aria-labelledby="save-title">
+    <div class="section-head"><h2 id="save-title">Savings</h2>${g ? helpButton('goal', 'How goal progress works') : ''}</div>
+    <div class="card goal-card">
+      ${g ? html`
+        <div class="goal-top">
+          <span class="goal-name">${g.name}</span>
+          <span class="goal-amounts"><strong>${formatWholeMoney(g.saved)}</strong> of ${formatWholeMoney(g.target)}</span>
+        </div>
+        <div class="bar goal-bar" role="progressbar" aria-label="${g.name} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${g.pct}"><span class="fill-good" style="width:${g.pct}%"></span></div>
+        <p class="muted small">${g.done ? html`${icon('checkCircle')} Goal reached. Nice work.` : `${g.pct}% there, ${formatWholeMoney(g.remaining)} to go`}</p>` : ''}
+      ${nudge ? html`<div class="nudge">
+          <p>On track to have <strong>${formatMoney(s.leftover)}</strong> left over this month. ${helpButton('leftover', 'How left over is worked out')}</p>
+          <button type="button" class="btn btn-quiet btn-sm" data-action="move-to-savings" data-amount="${s.leftover}" data-category="${savingsCat.id}">${icon('arrowDown')}Move it to savings</button>
+        </div>` : ''}
+    </div>
+  </section>`;
+}
+
 function recent(ctx) {
   const cats = categoryMap(ctx.data.categories);
   const latest = [...ctx.data.transactions].filter((t) => t.date <= ctx.today).sort(byNewest).slice(0, 5);
@@ -129,10 +217,51 @@ export function render(ctx) {
       <button type="button" class="icon-btn" data-action="nav" data-to="settings" aria-label="Settings">${icon('gear')}</button>
     </header>
     ${ctx.mode === 'demo' ? demoBanner() : ''}
+    ${paydayBanner(ctx)}
     ${hero(s)}
     ${s.mode === 'none' ? '' : html`<div class="tiles">${monthTile(s)}${balanceTile(ctx, s)}</div>`}
+    ${warningsSection(s)}
+    ${upcomingSection(ctx)}
+    ${savingsSection(ctx, s)}
     ${recent(ctx)}
   </main>`;
 }
 
-export const actions = {};
+export const actions = {
+  'payday-yes'(ctx, el) {
+    const date = el.dataset.date;
+    const amount = ctx.data.pay.amount;
+    let tx = null;
+    ctx.update((d) => {
+      const r = confirmPayday(d, date, amount);
+      tx = r.tx;
+      return r.data;
+    });
+    ctx.toast(`Added your ${formatMoney(amount)} paycheck`, {
+      duration: 5000,
+      action: {
+        label: 'Undo',
+        run: () => ctx.update((d) => ({
+          ...d,
+          transactions: d.transactions.filter((t) => t.id !== tx.id),
+          pay: d.pay ? { ...d.pay, handledThrough: addDays(date, -1) } : d.pay,
+        })),
+      },
+    });
+  },
+  'payday-other'(ctx, el) {
+    const date = el.dataset.date;
+    openQuickAdd(ctx, {
+      preset: { type: 'income', source: 'paycheck', amount: ctx.data.pay.amount, date },
+      onSaved: () => ctx.update((d) => markPaydayHandled(d, date)),
+    });
+  },
+  'payday-no'(ctx, el) {
+    const date = el.dataset.date;
+    ctx.update((d) => markPaydayHandled(d, date));
+    ctx.toast('Okay. If it arrives later, log it with + as Income.');
+  },
+  'move-to-savings'(ctx, el) {
+    openQuickAdd(ctx, { preset: { type: 'expense', categoryId: el.dataset.category, amount: Number(el.dataset.amount), note: 'Moved to savings' } });
+  },
+};

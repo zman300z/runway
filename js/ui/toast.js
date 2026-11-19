@@ -2,6 +2,7 @@
 import { html, setHTML } from './dom.js';
 
 let current = null;
+const queue = [];
 
 function dismiss(entry, instant = false) {
   if (!entry || entry.gone) return;
@@ -10,14 +11,23 @@ function dismiss(entry, instant = false) {
   if (current === entry) current = null;
   entry.el.classList.remove('show');
   setTimeout(() => entry.el.remove(), instant ? 0 : 260);
+  if (!instant && queue.length) {
+    const [message, opts] = queue.shift();
+    setTimeout(() => toast(message, opts), 300);
+  }
 }
 
 /**
- * Show a toast. Options: { action: { label, run }, duration (ms, Infinity to stay), tone: "bad" | "good" }.
+ * Show a toast. Options: { action: { label, run }, duration (ms, Infinity to stay), tone: "bad" | "good",
+ * queue: true to wait until the current toast is gone instead of replacing it }.
  */
-export function toast(message, { action = null, duration = 3500, tone = '' } = {}) {
+export function toast(message, { action = null, duration = 3500, tone = '', queue: wait = false } = {}) {
   const region = document.getElementById('toasts');
   if (!region) return null;
+  if (wait && current) {
+    queue.push([message, { action, duration, tone }]);
+    return null;
+  }
   dismiss(current, true);
   const el = document.createElement('div');
   el.className = `toast${tone ? ` toast-${tone}` : ''}`;
