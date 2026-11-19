@@ -164,3 +164,8 @@ Budget month = calendar month, or "starts on day X" (1 to 28). Days left include
 - **2026-11-19** The category donut shows at most 6 slices: the top 5 plus "Other". Tapping a slice or its row opens Activity filtered to that category and month.
 - **2026-11-19** Needs, wants and savings use the colorblind-validated blue, orange and aqua. The default Coffee color changed to a richer brown that passes the checks.
 - **2026-11-19** Big numbers use the same system font as everything else (no rounded display face), per the spec's system font stack.
+- **2026-11-19** The app icon is drawn by `tools/make-icons.js` (no image tools needed): a white rising line over runway dashes on an indigo gradient. The maskable version keeps the mark inside the safe zone.
+- **2026-11-19** A new version installs quietly and waits. "Update available, tap to refresh" switches over only when you tap it; otherwise it takes over the next time the app fully closes. Old caches are deleted on activation.
+- **2026-11-19** The icon badge only ever shows your real data (never demo numbers), and it is cleared at $0 or below.
+- **2026-11-19** The backup reminder appears 14 days after setup or after your last backup, and "Later" hides it for 3 days. Backups are blocked in demo mode so a demo file is never mistaken for yours.
+- **2026-11-19** Restoring a backup keeps a safety copy of the replaced data on the phone. After Erase everything, the app writes nothing more before it restarts at setup.

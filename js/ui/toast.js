@@ -21,11 +21,11 @@ function dismiss(entry, instant = false) {
  * Show a toast. Options: { action: { label, run }, duration (ms, Infinity to stay), tone: "bad" | "good",
  * queue: true to wait until the current toast is gone instead of replacing it }.
  */
-export function toast(message, { action = null, duration = 3500, tone = '', queue: wait = false } = {}) {
+export function toast(message, { action = null, duration = 3500, tone = '', queue: wait = false, tapAnywhere = false } = {}) {
   const region = document.getElementById('toasts');
   if (!region) return null;
   if (wait && current) {
-    queue.push([message, { action, duration, tone }]);
+    queue.push([message, { action, duration, tone, tapAnywhere }]);
     return null;
   }
   dismiss(current, true);
@@ -36,7 +36,9 @@ export function toast(message, { action = null, duration = 3500, tone = '', queu
   region.append(el);
   const entry = { el, timer: null, gone: false };
   if (action) {
-    el.querySelector('.toast-action').addEventListener('click', () => {
+    const target = tapAnywhere ? el : el.querySelector('.toast-action');
+    if (tapAnywhere) el.classList.add('toast-tappable');
+    target.addEventListener('click', () => {
       dismiss(entry);
       action.run();
     });

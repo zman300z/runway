@@ -16,7 +16,8 @@ import { editTransaction } from './ui/activity.js';
 import { shareFile } from './ui/files.js';
 import { plural } from './ui/format.js';
 import { limitSheet } from './ui/settings.js';
-import { formatWholeMoney } from './money.js';
+import { formatWholeMoney, floorDollars } from './money.js';
+import { actions as backupActions } from './ui/backup.js';
 import * as home from './ui/home.js';
 import * as activity from './ui/activity.js';
 import * as bills from './ui/bills.js';
@@ -48,6 +49,9 @@ const state = {
   cleanup: null,
 };
 const scrollMemory = new Map();
+let erased = false; // after Erase everything, nothing may be written again
+let swRegistration = null;
+let updateRequested = false;
 
 function parseHash() {
   const path = window.location.hash.replace(/^#\/?/, '') || 'home';
@@ -78,7 +82,7 @@ const ctx = {
   },
   setUI(patch) {
     state.ui = { ...state.ui, ...patch };
-    store.saveUI(state.ui);
+    if (!erased) store.saveUI(state.ui);
   },
   /** Change the data: fn gets the current data and returns the new data (or throws). */
   update(fn) {
@@ -100,9 +104,14 @@ const ctx = {
   startDemo,
   clearDemo,
   afterChange,
+  replaceData,
+  realData,
+  eraseEverything,
+  updateBadge,
 };
 
 function save() {
+  if (erased) return;
   try {
     store.save(state.data, state.mode === 'demo' ? 'demo' : 'data');
   } catch {
@@ -111,6 +120,7 @@ function save() {
 }
 
 function rememberRoute() {
+  if (erased) return;
   ctx.setUI({ route: state.route.path, leftAt: Date.now() });
 }
 
@@ -227,6 +237,76 @@ function clearDemo() {
   toast('Demo data cleared. Your own setup is back.');
 }
 
+// Restore, erase, badge, updates
+
+/** Your own data, even while demo data is showing. */
+function realData() {
+  const res = store.load('data');
+  return res.status === 'ok' ? res.data : defaultData({ today: state.today });
+}
+
+/** Replace everything with a restored backup, keeping a safety copy of what was there. */
+function replaceData(data) {
+  const current = store.readRaw('data');
+  if (current) store.keepCopy('pre-import', current);
+  if (state.mode === 'demo') {
+    store.remove('demo');
+    store.setMode('real');
+    state.mode = 'real';
+  }
+  state.data = data;
+  save();
+  runJobs();
+  render();
+}
+
+function eraseEverything() {
+  erased = true;
+  store.eraseAll();
+  if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
+  window.location.replace('./');
+}
+
+/** Today's safe-to-spend in whole dollars on the app icon (only if you turned it on). */
+function updateBadge() {
+  if (erased || state.mode === 'demo' || !state.data?.settings?.badge || !('setAppBadge' in navigator)) return;
+  const daily = ctx.summary.daily;
+  const dollars = daily === null ? 0 : floorDollars(daily);
+  const job = dollars > 0 ? navigator.setAppBadge(dollars) : navigator.clearAppBadge();
+  job.catch(() => {});
+}
+
+function offerUpdate(worker) {
+  toast('Update available, tap to refresh', {
+    duration: Infinity,
+    tapAnywhere: true,
+    action: {
+      label: 'Refresh',
+      run: () => {
+        updateRequested = true;
+        worker.postMessage({ type: 'SKIP_WAITING' });
+      },
+    },
+  });
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (updateRequested) window.location.reload();
+  });
+  navigator.serviceWorker.register('./sw.js').then((reg) => {
+    swRegistration = reg;
+    if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const worker = reg.installing;
+      worker?.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(worker);
+      });
+    });
+  }).catch(() => {});
+}
+
 // Rendering
 
 function tabbar(active) {
@@ -286,6 +366,7 @@ function render({ restoreScroll = false } = {}) {
   setHTML(root, html`${screen.render(ctx, route.params)}${tabbar(route.name)}`);
   state.cleanup = screen.mount?.(root, ctx, route.params) ?? null;
   window.scrollTo(0, restoreScroll ? scrollMemory.get(route.path) ?? 0 : y);
+  updateBadge();
 }
 
 // Events
@@ -303,6 +384,8 @@ const GLOBAL_ACTIONS = {
   'edit-tx': (el) => editTransaction(ctx, el.dataset.id),
   'edit-limit': () => limitSheet(ctx),
   'clear-demo': () => clearDemo(),
+  'export-backup': () => backupActions['export-backup'](ctx),
+  'snooze-backup': () => backupActions['snooze-backup'](ctx),
   'export-raw': async () => {
     const raw = state.fatal?.raw ?? '';
     await shareFile(`runway-raw-${state.today}.json`, raw, 'application/json');
@@ -358,6 +441,8 @@ function onVisibility() {
     rememberRoute();
   } else {
     refreshDay();
+    swRegistration?.update().catch(() => {});
+    if (swRegistration?.waiting && navigator.serviceWorker.controller) offerUpdate(swRegistration.waiting);
   }
 }
 
@@ -407,6 +492,7 @@ function boot() {
   state.route = parseHash();
   render();
   scheduleMidnight();
+  registerServiceWorker();
 }
 
 boot();

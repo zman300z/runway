@@ -261,6 +261,15 @@ export function setGoal(data, goal, today) {
   return { ...data, goal: { name, target: goal.target, saved, since: data.goal?.since ?? goal.since ?? today } };
 }
 
+/** Remember when you last exported a backup. */
+export function markBackedUp(data, now = Date.now()) {
+  return { ...data, meta: { ...data.meta, lastBackupAt: now } };
+}
+
+export function setSetting(data, key, value) {
+  return { ...data, settings: { ...data.settings, [key]: value } };
+}
+
 /** Run on every open, on resume and at midnight: post due bills and remember the day. */
 export function runDailyJobs(data, today, opts = {}) {
   const { data: posted, added } = postDueCharges(data, today, opts);

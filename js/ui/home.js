@@ -6,6 +6,7 @@ import { helpButton } from './explain-sheet.js';
 import { bigMoney, lengthClass, safeColor, plural } from './format.js';
 import { txRow } from './activity.js';
 import { balanceCard, mountBalanceChart } from './balance-chart.js';
+import { backupBanner } from './backup.js';
 import { openQuickAdd } from './quickadd.js';
 import { ringSVG } from '../charts.js';
 import { formatMoney, formatWholeMoney } from '../money.js';
@@ -222,6 +223,7 @@ export function render(ctx) {
     ${hero(s)}
     ${s.mode === 'none' ? '' : html`<div class="tiles">${monthTile(s)}${balanceTile(ctx, s)}</div>`}
     ${warningsSection(s)}
+    ${backupBanner(ctx)}
     ${s.mode === 'none' ? '' : balanceCard(ctx)}
     ${upcomingSection(ctx)}
     ${savingsSection(ctx, s)}

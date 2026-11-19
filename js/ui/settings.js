@@ -8,8 +8,12 @@ import * as categoriesPage from './categories-page.js';
 import { formatMoney, formatWholeMoney } from '../money.js';
 import { formatDate, addDays } from '../dates.js';
 import { FREQUENCY_LABEL, describeDays, nextPayday, monthlyPay, suggestedLimit, LAST_DAY, ordinal } from '../pay.js';
-import { setBalance, setPay, setBudget, setGoal } from '../actions.js';
+import { setBalance, setPay, setBudget, setGoal, setSetting } from '../actions.js';
 import { APP_VERSION } from '../version.js';
+import { actions as backupActions, lastBackupText } from './backup.js';
+
+/** The icon badge needs the Badging API and notification permission (home screen apps on iOS 16.4+). */
+const badgeSupported = () => 'setAppBadge' in navigator && 'Notification' in window;
 
 const TINT = {
   balance: '#34C759', reconcile: '#0A84FF', pay: '#FF9500', limit: '#5E5CE6', start: '#8E8E93',
@@ -58,6 +62,25 @@ export function render(ctx, params = []) {
       ${row('nav', 'list', TINT.categories, 'Categories', String(d.categories.length), 'settings/categories')}
     </ul>
 
+    ${badgeSupported() ? html`
+      <h2 class="group-title">App icon</h2>
+      <ul class="card list-card">
+        <li class="toggle-row">
+          <span class="row-icon" style="--tint:#FF3B30">${icon('bell')}</span>
+          <label class="row-label" for="badge-toggle">Show today's safe-to-spend on the app icon</label>
+          <input type="checkbox" switch class="switch" id="badge-toggle" data-input="badge" ${d.settings.badge ? 'checked' : ''}>
+        </li>
+      </ul>
+      <p class="group-foot">Shows today's number in whole dollars on the Runway icon. It refreshes when you open the app, so it can be behind if you haven't opened Runway today. iPhone asks for notification permission because badges count as notifications. Runway never sends any.</p>` : ''}
+
+    <h2 class="group-title">Backup and data</h2>
+    <ul class="card list-card">
+      ${row('export-backup', 'download', '#34C759', 'Export backup', lastBackupText(ctx))}
+      ${row('import-backup', 'upload', '#0A84FF', 'Import backup')}
+      ${row('export-csv', 'list', '#30B0C7', 'Export transactions (CSV)')}
+    </ul>
+    <p class="group-foot">Save backups to Files or iCloud Drive. Always back up before deleting the app or switching phones.</p>
+
     <h2 class="group-title">Demo data</h2>
     <ul class="card list-card">
       ${ctx.mode === 'demo'
@@ -65,6 +88,10 @@ export function render(ctx, params = []) {
         : row('start-demo', 'sparkle', TINT.demo, 'Explore with demo data')}
     </ul>
     <p class="group-foot">Demo data is kept separate. Clearing it brings back your own setup exactly as it was.</p>
+
+    <ul class="card list-card danger-card">
+      <li><button type="button" class="row danger-row" data-action="erase-all">${icon('trash')}<span class="row-label">Erase everything</span></button></li>
+    </ul>
 
     <p class="about">${icon('lock')} Runway ${APP_VERSION}. Your data stays on this phone. Nothing is sent anywhere.</p>
   </main>`;
@@ -341,10 +368,38 @@ export const actions = {
   'edit-split': (ctx) => splitSheet(ctx),
   'edit-goal': (ctx) => goalSheet(ctx),
   'start-demo': (ctx) => ctx.startDemo(),
+  ...backupActions,
   ...categoriesPage.actions,
 };
 
-export const inputs = { ...categoriesPage.inputs };
+async function toggleBadge(ctx, el, e) {
+  if (e.type !== 'change') return;
+  if (!el.checked) {
+    ctx.update((d) => setSetting(d, 'badge', false));
+    navigator.clearAppBadge?.().catch(() => {});
+    ctx.toast('Icon badge off');
+    return;
+  }
+  // Ask only now, when you switch it on.
+  let permission = Notification.permission;
+  if (permission !== 'granted') {
+    try {
+      permission = await Notification.requestPermission();
+    } catch {
+      permission = 'denied';
+    }
+  }
+  if (permission !== 'granted') {
+    el.checked = false;
+    ctx.toast('The badge needs notification permission. You can allow it in iPhone Settings, Notifications, Runway.', { duration: 7000 });
+    return;
+  }
+  ctx.update((d) => setSetting(d, 'badge', true));
+  ctx.updateBadge();
+  ctx.toast('Icon badge on. It updates whenever you open Runway.');
+}
+
+export const inputs = { ...categoriesPage.inputs, badge: toggleBadge };
 
 export function mount(root, ctx, params = []) {
   if (params[0] === 'categories') return categoriesPage.mount(root, ctx);

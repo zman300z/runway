@@ -2093,6 +2093,7 @@ svg.i {
 
 .about {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -3090,4 +3091,88 @@ body:has(.sheet-layer.open) .toast-region {
   gap: 10px;
   margin-bottom: 6px;
   font-weight: 600;
+}
+
+/* Settings toggles and the danger zone */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 16px;
+}
+
+.toggle-row .row-label {
+  flex: 1;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.danger-card {
+  margin-top: 26px;
+}
+
+.danger-row {
+  justify-content: center;
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.danger-row .row-label {
+  flex: 0 0 auto;
+}
+
+.danger-row svg.i {
+  width: 19px;
+  height: 19px;
+}
+
+.btn-erase {
+  background: var(--bad);
+  color: #fff;
+}
+
+/* Backup reminder */
+
+.backup-banner {
+  margin-top: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--card));
+}
+
+.backup-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.backup-top > svg.i {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent-text);
+}
+
+.backup-top h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.backup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.backup-actions .btn + .btn {
+  margin-top: 0;
+}
+
+.backup-actions .btn-primary {
+  flex: 1;
+}
+
+.toast-tappable {
+  cursor: pointer;
 }

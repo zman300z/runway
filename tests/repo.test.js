@@ -77,3 +77,33 @@ test('logic modules have no DOM or browser code, so they run in Node', () => {
 test('no backups or exports with real money data in the repo', () => {
   assert.deepEqual(FILES.filter((f) => /runway-(backup|transactions)/i.test(f)), []);
 });
+
+test('every app file is in the service worker cache list (so the app works offline)', () => {
+  const sw = read('sw.js');
+  const listed = new Set([...sw.matchAll(/'\.\/([^']*)'/g)].map((m) => m[1]));
+  const needed = FILES.filter((f) => f === 'index.html' || f === 'manifest.webmanifest' || /^(js|css|icons)\//.test(f));
+  assert.deepEqual(needed.filter((f) => !listed.has(f)), [], 'add these to ASSETS in sw.js');
+  assert.deepEqual([...listed].filter((f) => f && !FILES.includes(f)), [], 'these are listed in sw.js but do not exist');
+});
+
+test('the app version, cache version and package version match', () => {
+  const sw = /const VERSION = '([^']+)'/.exec(read('sw.js'))[1];
+  const app = /APP_VERSION = '([^']+)'/.exec(read('js/version.js'))[1];
+  const pkg = JSON.parse(read('package.json')).version;
+  assert.equal(app, sw);
+  assert.equal(pkg, sw);
+});
+
+test('the manifest and page have everything iPhone needs', () => {
+  const m = JSON.parse(read('manifest.webmanifest'));
+  assert.equal(m.name, 'Runway');
+  assert.equal(m.short_name, 'Runway');
+  assert.equal(m.display, 'standalone');
+  const sizes = m.icons.map((i) => `${i.sizes}${i.purpose === 'maskable' ? ' maskable' : ''}`);
+  assert.deepEqual(sizes, ['180x180', '192x192', '512x512', '512x512 maskable']);
+  for (const icon of m.icons) assert.ok(existsSync(join(ROOT, icon.src)), icon.src);
+  const page = read('index.html');
+  for (const needle of ['viewport-fit=cover', 'apple-touch-icon', 'apple-mobile-web-app-capable', 'apple-mobile-web-app-status-bar-style', 'theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)', 'theme-color" content="#000000" media="(prefers-color-scheme: dark)', 'rel="manifest" href="./manifest.webmanifest"']) {
+    assert.ok(page.includes(needle), needle);
+  }
+});
